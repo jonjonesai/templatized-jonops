@@ -29,6 +29,8 @@ The `/init` wizard asks ~15 questions about your business and automatically gene
 
 **See [QUICKSTART.md](QUICKSTART.md) for the 15-minute setup guide.**
 
+**Migrating from an existing project?** See [MIGRATION.md](MIGRATION.md) for backup and migration steps.
+
 ## How It Works
 
 A Python scheduler (`scheduler.py`) reads `schedule.json` and launches the Claude Code CLI at designated times. Each run loads a **skill file** — a detailed prompt that tells the agent exactly what to do, which APIs to call, and how to report results. The agent executes, logs to Airtable/Asana, sends a Telegram alert, and exits.
