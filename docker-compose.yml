@@ -1,0 +1,29 @@
+# =============================================================================
+# JonOps — Docker Compose Configuration
+# =============================================================================
+# Run: docker compose up -d
+# Logs: docker compose logs -f
+# Stop: docker compose down
+# =============================================================================
+
+services:
+  jonops:
+    build: .
+    container_name: jonops-agent
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      # Persist agent data across container restarts
+      - ./CLAUDE.md:/home/agent/project/CLAUDE.md
+      - ./MEMORY.md:/home/agent/project/MEMORY.md
+      - ./email-persona.md:/home/agent/project/email-persona.md
+      - ./observations.md:/home/agent/project/observations.md
+      - ./logs:/home/agent/project/logs
+      - ./sessions:/home/agent/project/sessions
+      - ./cache:/home/agent/project/cache
+    environment:
+      - TZ=${TZ:-UTC}
+    # Optional: expose port for debugging
+    # ports:
+    #   - "8080:8080"

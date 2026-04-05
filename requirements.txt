@@ -1,0 +1,20 @@
+# =============================================================================
+# JonOps Python Dependencies
+# =============================================================================
+
+# Core HTTP client (used by telegram-daemon, social-engager, etc.)
+requests>=2.31.0
+
+# Claude Agent SDK (for Telegram chat interface)
+claude-code-sdk>=0.1.0
+
+# Astronomy/astrology data (optional - for astrology niches)
+# Uncomment if your business uses astronomical data
+# kerykeion>=4.0.0
+# ephem>=4.1.0
+
+# Data processing
+python-dateutil>=2.8.0
+
+# Environment management
+python-dotenv>=1.0.0
