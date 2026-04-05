@@ -1,0 +1,220 @@
+{
+  "project": "jonops",
+  "timezone": "{{TIMEZONE}}",
+  "auth_expiry": "2027-12-31",
+  "notes": "JonOps schedule template. active:false = skill exists but cron disabled. Set timezone in CLAUDE.md. Update times as needed.",
+  "recurring": {
+    "daily": {
+      "00:00": {
+        "task": "blog-writer",
+        "skill": "blog-writer.md",
+        "prompt": "blog-writer.md",
+        "description": "Write and publish one SEO blog post from Content Calendar queue",
+        "timeout": 5400,
+        "active": true
+      },
+      "07:00": {
+        "task": "daily-contribution",
+        "skill": "daily-contribution.md",
+        "prompt": "daily-contribution.md",
+        "description": "Write and publish today's daily contribution (tips, facts, or themed content)",
+        "timeout": 3600,
+        "active": true
+      },
+      "09:00": {
+        "task": "social-poster-1",
+        "skill": "social-poster-1.md",
+        "prompt": "social-poster-1.md",
+        "description": "Create platform-specific social posts from most recent blog post",
+        "timeout": 3600,
+        "active": true
+      },
+      "11:00": {
+        "task": "email-checker",
+        "skill": "email-checker.md",
+        "prompt": "email-checker.md",
+        "description": "Morning email check — categorize, draft replies per email persona",
+        "timeout": 1800,
+        "active": true
+      },
+      "12:00": {
+        "task": "social-miner",
+        "skill": "social-miner.md",
+        "prompt": "social-miner.md",
+        "description": "Discover Reddit posts with engagement opportunities, draft data-enriched responses",
+        "timeout": 2400,
+        "active": true
+      },
+      "16:00": {
+        "task": "social-engager",
+        "skill": "social-engager.md",
+        "prompt": "social-engager.md",
+        "description": "Monitor posted conversations, update metrics, draft follow-ups, flag items for posting",
+        "timeout": 2400,
+        "active": true
+      },
+      "20:00": {
+        "task": "social-poster-2",
+        "skill": "social-poster-2.md",
+        "prompt": "social-poster-2.md",
+        "description": "Create social posts from Social Queue (researcher topics)",
+        "timeout": 3600,
+        "active": true
+      },
+      "21:00": {
+        "task": "email-checker",
+        "skill": "email-checker.md",
+        "prompt": "email-checker.md",
+        "description": "Evening email check",
+        "timeout": 1800,
+        "active": true
+      },
+      "22:00": {
+        "task": "asana-check",
+        "skill": "asana-check.md",
+        "prompt": "asana-check.md",
+        "description": "Check Asana Agent To Do section for ad hoc tasks from operator",
+        "timeout": 1800,
+        "active": true
+      },
+      "14:00": {
+        "task": "link-outreach-lead-finder",
+        "skill": "link-outreach-lead-finder.md",
+        "prompt": "link-outreach-lead-finder.md",
+        "description": "Run one query from Link Outreach Queries — scrape blogs/sites, verify emails, push to Airtable",
+        "timeout": 3600,
+        "active": true
+      },
+      "18:00": {
+        "task": "link-outreach-conductor",
+        "skill": "link-outreach-conductor.md",
+        "prompt": "link-outreach-conductor.md",
+        "description": "Push up to 5 verified backlink leads to Instantly, check replies, log positives to Asana",
+        "timeout": 2400,
+        "active": true
+      },
+      "23:30": {
+        "task": "daily-watchdog",
+        "skill": "daily-watchdog.md",
+        "prompt": "daily-watchdog.md",
+        "description": "Review today's cron results, retry any failures, report to Asana",
+        "timeout": 3600,
+        "active": true
+      }
+    },
+    "weekly": {
+      "monday_08:00": {
+        "task": "keyword-researcher",
+        "skill": "keyword-researcher.md",
+        "prompt": "keyword-researcher.md",
+        "description": "Research and queue 10 new SEO keywords via DataForSEO",
+        "timeout": 3600,
+        "active": true
+      },
+      "monday_09:30": {
+        "task": "content-researcher",
+        "skill": "content-researcher.md",
+        "prompt": "content-researcher.md",
+        "description": "Research content angles for queued keywords, populate Content Calendar",
+        "timeout": 3600,
+        "active": true
+      },
+      "monday_02:30": {
+        "task": "market-intelligence",
+        "skill": "market-intelligence.md",
+        "prompt": "market-intelligence.md",
+        "description": "Weekly market scan — trends, SERP players, content gaps, keyword opportunities. Feeds keyword-researcher, content-researcher, social-researcher, link-outreach-query-researcher.",
+        "timeout": 5400,
+        "active": true
+      },
+      "monday_12:00": {
+        "task": "link-outreach-query-researcher",
+        "skill": "link-outreach-query-researcher.md",
+        "prompt": "link-outreach-query-researcher.md",
+        "description": "Mine competitor backlinks, generate and score search queries for blog/PR outreach",
+        "timeout": 3600,
+        "active": true
+      },
+      "monday_14:00": {
+        "task": "b2b-outreach-query-researcher",
+        "skill": "b2b-outreach-query-researcher.md",
+        "prompt": "b2b-outreach-query-researcher.md",
+        "description": "Research and queue B2B target search queries per CLAUDE.md target profile",
+        "timeout": 3600,
+        "active": false
+      },
+      "tuesday_10:00": {
+        "task": "b2b-outreach-lead-finder",
+        "skill": "b2b-outreach-lead-finder.md",
+        "prompt": "b2b-outreach-lead-finder.md",
+        "description": "Find B2B bulk buyer leads via Google Maps or LinkedIn per CLAUDE.md target profile",
+        "timeout": 3600,
+        "active": false
+      },
+      "thursday_15:00": {
+        "task": "b2b-outreach-lead-finder",
+        "skill": "b2b-outreach-lead-finder.md",
+        "prompt": "b2b-outreach-lead-finder.md",
+        "description": "Find B2B bulk buyer leads via Google Maps or LinkedIn per CLAUDE.md target profile",
+        "timeout": 3600,
+        "active": false
+      },
+      "friday_12:00": {
+        "task": "b2b-outreach-lead-finder",
+        "skill": "b2b-outreach-lead-finder.md",
+        "prompt": "b2b-outreach-lead-finder.md",
+        "description": "Find B2B bulk buyer leads via Google Maps or LinkedIn per CLAUDE.md target profile",
+        "timeout": 3600,
+        "active": false
+      },
+      "wednesday_10:00": {
+        "task": "b2b-outreach-conductor",
+        "skill": "b2b-outreach-conductor.md",
+        "prompt": "b2b-outreach-conductor.md",
+        "description": "Push verified B2B leads to Instantly B2B campaign, manage replies",
+        "timeout": 2400,
+        "active": false
+      },
+      "thursday_08:00": {
+        "task": "social-researcher",
+        "skill": "social-researcher.md",
+        "prompt": "social-researcher.md",
+        "description": "Research 2 social post topics, write briefs, push to Social Queue",
+        "timeout": 2400,
+        "active": true
+      },
+      "thursday_10:00": {
+        "task": "newsletter-researcher",
+        "skill": "newsletter-researcher.md",
+        "prompt": "newsletter-researcher.md",
+        "description": "Research newsletter topic, write brief with subject line options",
+        "timeout": 2400,
+        "active": true
+      },
+      "friday_08:00": {
+        "task": "newsletter-writer",
+        "skill": "newsletter-writer.md",
+        "prompt": "newsletter-writer.md",
+        "description": "Write and send weekly newsletter from Newsletter Queue",
+        "timeout": 3600,
+        "active": true
+      },
+      "saturday_08:00": {
+        "task": "social-researcher",
+        "skill": "social-researcher.md",
+        "prompt": "social-researcher.md",
+        "description": "Research 2 social post topics for next week queue",
+        "timeout": 2400,
+        "active": true
+      },
+      "sunday_08:00": {
+        "task": "sendy-sync",
+        "skill": "sendy-sync.md",
+        "prompt": "sendy-sync.md",
+        "description": "Sync new Fluent CRM contacts to Sendy newsletter list",
+        "timeout": 1800,
+        "active": true
+      }
+    }
+  }
+}

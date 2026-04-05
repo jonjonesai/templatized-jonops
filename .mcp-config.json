@@ -1,0 +1,9 @@
+{
+    "astrology-basic": {
+        "type": "sse",
+        "url": "https://astrology-basic.mcpize.run",
+        "headers": {
+            "Authorization": "Bearer ${ASTROLOGY_API_KEY}"
+        }
+    }
+}
