@@ -41,7 +41,7 @@ Use **Content Gaps**, **Key Trends**, and **Competitor Moves** to shape content 
 
 ### Step 2: Read top 5 queued keywords
 ```bash
-curl -s --retry 3 --retry-delay 2 "https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_KEYWORDS_TABLE}?filterByFormula=Status='Queue'&sort[0][field]=Score&sort[0][direction]=desc&maxRecords=5" \
+curl -s --retry 3 --retry-delay 2 "https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_KEYWORDS_TABLE}?filterByFormula=Status='Queue'&sort[0][field]=Search%20Volume&sort[0][direction]=desc&maxRecords=5" \
   -H "Authorization: Bearer ${AIRTABLE_API_KEY}"
 ```
 

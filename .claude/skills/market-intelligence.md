@@ -112,6 +112,6 @@ SKILL_RESULT: success | Market intelligence for [Month] logged | [N] keyword opp
 - If DataForSEO fails: skip competitor keyword scan, run content scan only
 
 ## Rules
-- This runs ONCE per month — do not re-run mid-month
+- This runs ONCE per week (Monday morning) — do not re-run mid-week
 - Focus on actionable insights, not raw data dumps
 - Always update MEMORY.md with key findings

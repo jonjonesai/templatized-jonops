@@ -34,28 +34,30 @@ def get_current_task(force_slot=None):
     current_time = force_slot or now.strftime("%H:%M")
 
     # Monthly tasks (only on 1st of month)
+    # NOTE: If monthly task is inactive, fall through to check weekly/daily
     if now.day == 1:
         monthly = schedule.get("recurring", {}).get("monthly", {})
         monthly_key = f"1st_{current_time}"
         if monthly_key in monthly:
             task = monthly[monthly_key].copy()
-            if not task.get("active", True):
-                return {}
-            task["slot"] = current_time
-            task["schedule_type"] = "monthly"
-            return task
+            if task.get("active", True):
+                task["slot"] = current_time
+                task["schedule_type"] = "monthly"
+                return task
+            # Inactive monthly → fall through to weekly/daily
 
     # Weekly tasks (override daily on matching day+time)
+    # NOTE: If weekly task is inactive, fall through to check daily
     weekly = schedule.get("recurring", {}).get("weekly", {})
     weekly_key = f"{day_name}_{current_time}"
     if weekly_key in weekly:
         task = weekly[weekly_key].copy()
-        if not task.get("active", True):
-            return {}
-        task["slot"] = current_time
-        task["schedule_type"] = "weekly"
-        task["day"] = day_name
-        return task
+        if task.get("active", True):
+            task["slot"] = current_time
+            task["schedule_type"] = "weekly"
+            task["day"] = day_name
+            return task
+        # Inactive weekly → fall through to daily
 
     # Daily tasks
     daily = schedule.get("recurring", {}).get("daily", {})

@@ -88,26 +88,30 @@ if [ ! -f "$PROMPT_PATH" ]; then
 fi
 
 # ---------------------------------------------------------------
-# Asana inbox check — injected into the 12:00 email slot daily
+# Asana inbox check — injected into the 11:00 email slot daily
+# Uses ASANA_INBOX_SECTION_GID and ASANA_DONE_SECTION_GID from .env
 # ---------------------------------------------------------------
 ASANA_INBOX_INSTRUCTION=""
-if [ "$WITA_TIME" = "12:00" ] || [ "$WITA_TIME" = "11:58" ] || [ "$WITA_TIME" = "11:59" ] || [ "$WITA_TIME" = "12:01" ] || [ "$WITA_TIME" = "12:02" ]; then
-    ASANA_INBOX_INSTRUCTION="
+if [ "$WITA_TIME" = "11:00" ] || [ "$WITA_TIME" = "10:58" ] || [ "$WITA_TIME" = "10:59" ] || [ "$WITA_TIME" = "11:01" ] || [ "$WITA_TIME" = "11:02" ]; then
+    # Only inject if Asana env vars are configured
+    if [ -n "${ASANA_INBOX_SECTION_GID:-}" ] && [ -n "${ASANA_DONE_SECTION_GID:-}" ]; then
+        ASANA_INBOX_INSTRUCTION="
 ADDITIONAL TASK — ASANA INBOX CHECK (do this BEFORE the email check):
-Before starting the email check, check the Asana inbox section (section GID: 1213375232784894)
+Before starting the email check, check the Asana inbox section (section GID: ${ASANA_INBOX_SECTION_GID})
 for any ad-hoc tasks from the operator. Use curl with the ASANA_API_KEY from .env:
   curl -s -H 'Authorization: Bearer '\$(printenv ASANA_API_KEY) \\
-    'https://app.asana.com/api/1.0/tasks?section=1213375232784894&opt_fields=name,notes,assignee,due_on,completed'
+    'https://app.asana.com/api/1.0/tasks?section=${ASANA_INBOX_SECTION_GID}&opt_fields=name,notes,assignee,due_on,completed'
 If there are any incomplete tasks in the inbox:
 1. Read the task details
 2. Execute the task if it's something you can do autonomously (content creation, social posts, research, etc.)
-3. Move completed tasks to the Done section (GID: 1213329229081073) using:
+3. Move completed tasks to the Done section (GID: ${ASANA_DONE_SECTION_GID}) using:
    curl -s -X POST -H 'Authorization: Bearer '\$(printenv ASANA_API_KEY) -H 'Content-Type: application/json' \\
-     -d '{\"data\":{\"task\":\"TASK_GID\",\"section\":\"1213329229081073\"}}' \\
-     'https://app.asana.com/api/1.0/sections/1213329229081073/addTask'
+     -d '{\"data\":{\"task\":\"TASK_GID\",\"section\":\"${ASANA_DONE_SECTION_GID}\"}}' \\
+     'https://app.asana.com/api/1.0/sections/${ASANA_DONE_SECTION_GID}/addTask'
 4. If a task requires operator input or is beyond your capabilities, leave it in inbox and add a comment
 After the Asana check, proceed with the email check as normal.
 "
+    fi
 fi
 
 # ---------------------------------------------------------------
@@ -168,23 +172,6 @@ unset CLAUDECODE
 # .credentials.json is the correct approach for long-running cron.
 # ---------------------------------------------------------------
 # (Clean HOME approach removed 2026-03-14 — was preventing token refresh)
-
-# ---------------------------------------------------------------
-# Pre-flight auth check — fail fast instead of hanging for 60min
-# ---------------------------------------------------------------
-AUTH_CHECK="OK"
-if ! echo "$AUTH_CHECK" | grep -q "OK"; then
-    {
-        echo "========================================================"
-        echo "DISPATCH: $TASK_NAME | $WITA_DATE $WITA_TIME WITA"
-        echo "AUTH CHECK FAILED — Claude cannot authenticate."
-        echo "Check ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN in .env"
-        echo "Auth output: $AUTH_CHECK"
-        echo "========================================================"
-    } > "$LOG_FILE"
-    echo "[$TIMESTAMP] ABORTED: Claude auth check failed. See $LOG_FILE"
-    exit 1
-fi
 
 # Write diagnostic header directly to the task log file
 {

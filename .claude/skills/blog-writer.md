@@ -372,32 +372,29 @@ to maintaining your starter</a>.</p>
 
 ## 7. Step 5: Image Generation
 
-### Pipeline: n8n Webhook → Replicate (Flux 2 Pro) → Cloudinary → Airtable → WordPress
+### Pipeline: generate-image.sh → Replicate (Flux) → Tinify → WordPress
 
-Every image is generated via the n8n webhook. This ensures all images are:
-- Generated with consistent quality (Flux 2 Pro)
-- Hosted on Cloudinary (fast CDN)
+Every image is generated via the `generate-image.sh` script. This ensures all images are:
+- Generated with consistent quality (Flux via Replicate)
+- Compressed via Tinify (optimal file size)
+- Uploaded directly to the WP media library
 - Tracked in the Airtable "Generated Images" table
-- Uploaded to the WP media library
 
 ### 7a. Generate Each Image
 
-For each image (1 featured + 1 per H2), send a POST to the webhook:
+For each image (1 featured + 1 per H2), run the generate-image.sh script:
 
 ```bash
-curl -s -X POST "$N8N_WEBHOOK_URL" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model_path": "black-forest-labs/flux-pro",
-    "prompt": "YOUR IMAGE PROMPT HERE",
-    "aspect_ratio": "16:9",
-    "title": "Short descriptive title"
-  }'
+# Generate image and upload to WordPress
+bash /home/agent/project/generate-image.sh \
+  "YOUR IMAGE PROMPT HERE" \
+  "short-descriptive-title"
 ```
 
+The script outputs the WordPress media URL on success. Capture this for embedding in the post.
+
 **Aspect ratios:**
-- Featured image: `"16:9"` (landscape, will be the post thumbnail)
-- H2 section images: `"16:9"` (consistent with featured)
+The script generates landscape images by default (suitable for blog featured images and section images).
 
 ### 7b. Image Prompt Guidelines
 
@@ -423,21 +420,27 @@ Write prompts that are:
 
 ### 7c. Upload to WordPress Media Library
 
-The n8n webhook returns a Cloudinary URL. Download and upload to WordPress:
+The `generate-image.sh` script handles the full pipeline:
+1. Generates image via Replicate
+2. Compresses via Tinify
+3. Uploads to WordPress Media Library
+4. Returns the WordPress media URL
 
+**Usage:**
 ```bash
-# Download from Cloudinary
-curl -sL "$CLOUDINARY_IMAGE_URL" -o /tmp/post-image.webp
+# The script returns the WP media URL on stdout
+WP_IMAGE_URL=$(bash /home/agent/project/generate-image.sh "your prompt" "image-title")
+echo "Image URL: $WP_IMAGE_URL"
+```
 
-# Upload to WordPress
+If you need to manually upload an existing image:
+```bash
 curl -s -X POST "$WP_URL/wp-json/wp/v2/media" \
   -u "$WP_USERNAME:$WP_PASSWORD" \
   -H "Content-Disposition: attachment; filename=\"keyword-slug-section-name.webp\"" \
   -H "Content-Type: image/webp" \
   --data-binary @/tmp/post-image.webp
 ```
-
-The response returns the media ID and source URL.
 
 ### 7d. Set the Featured Image
 
@@ -838,7 +841,7 @@ Asana:          Task created in Drafts section
 | Airtable Meta | `https://api.airtable.com/v0/meta/bases/$AIRTABLE_BASE_ID/tables` | Bearer: `$AIRTABLE_API_KEY` |
 | DataForSEO SERP | `https://api.dataforseo.com/v3/serp/google/organic/live/regular` | Basic: `$DATAFORSEO_LOGIN:$DATAFORSEO_PASSWORD` |
 | Firecrawl | `https://api.firecrawl.dev/v1/scrape` | Bearer: `$FIRECRAWL_API_KEY` |
-| n8n Image Webhook | `$N8N_WEBHOOK_URL` | None (webhook URL is the auth) |
+| Image Generation | `generate-image.sh` | Uses REPLICATE_API + TINIFY_API from .env |
 | Asana | `https://app.asana.com/api/1.0/` | Bearer: `$ASANA_API_KEY` |
 
 **Note on Airtable:** Always strip whitespace from the API key: `AIRTABLE_KEY=$(echo "$AIRTABLE_API_KEY" | tr -d '[:space:]')`
@@ -986,8 +989,8 @@ Use `/v3/serp/google/organic/live/regular` — NOT `/live` alone.
 **Asana 403:**
 Use `app.asana.com/api/1.0` — NOT `api.asana.com`.
 
-**n8n webhook timeout:**
-Image generation can take 30-60 seconds. Use `--max-time 120` with curl.
+**generate-image.sh timeout:**
+Image generation can take 30-60 seconds. The script handles timeouts internally.
 
 **WordPress image upload fails:**
 Ensure `Content-Type` matches the file format. Use `image/webp` for .webp files.
