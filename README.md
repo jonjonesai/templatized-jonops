@@ -118,6 +118,13 @@ schedule.json → scheduler.py → Claude Code CLI → skill file → APIs → d
 
 `email-verifier`, `google-maps-scraper`, `google-serp-scraper`, `linkedin-scraper`
 
+### Manual Commands
+
+| Command | What It Does |
+|---------|--------------|
+| `/init` | Onboarding wizard — answers questions, generates config files |
+| `/validate` | Post-deployment health check — catches misconfigurations before first cron run |
+
 ## Deployment
 
 ### Option 1: Use the Wizard (Recommended)

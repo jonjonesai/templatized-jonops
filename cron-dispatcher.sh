@@ -117,22 +117,17 @@ fi
 # ---------------------------------------------------------------
 # Task-specific overrides — injected based on task name
 # ---------------------------------------------------------------
+# Task-specific overrides can be injected here if needed
+# To add overrides: create a file at /home/agent/project/overrides/${TASK_NAME}.md
+# and the agent will read it before executing the skill
 TASK_OVERRIDES=""
-if [ "$TASK_NAME" = "social" ]; then
-    OVERRIDE_FILE="/home/agent/project/social-overrides.md"
-    if [ -f "$OVERRIDE_FILE" ]; then
-        TASK_OVERRIDES="
-CRITICAL — READ THIS OVERRIDE FILE FIRST (takes priority over the prompt):
+OVERRIDE_FILE="/home/agent/project/overrides/${TASK_NAME}.md"
+if [ -f "$OVERRIDE_FILE" ]; then
+    TASK_OVERRIDES="
+IMPORTANT — READ OVERRIDE FILE FIRST:
 Read the file at $OVERRIDE_FILE BEFORE reading the main prompt.
-The overrides in that file REPLACE the corresponding sections in social-poster.md.
-Specifically:
-- Use generate-image.sh for ALL images (NOT n8n webhook)
-- Instagram IS connected — schedule Instagram posts too
-- Pinterest provider has NO id field — use pinterestData for board/title/link
-- Generate a UNIQUE image for EVERY post (6 images for 6 posts)
-- Use Python requests (not curl) for Metricool API calls with emojis
+The overrides in that file take priority over the default skill instructions.
 "
-    fi
 fi
 
 # Build the instruction for Claude
