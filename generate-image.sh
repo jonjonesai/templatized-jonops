@@ -21,6 +21,7 @@ ASPECT_RATIO="16:9"
 FILENAME="image-$(date +%s)"
 DO_UPLOAD=false
 POST_ID=""
+MODEL="flux-pro"  # default: flux-pro (~$0.04/image). Use flux-2-pro for premium (~$0.08/image).
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -29,6 +30,7 @@ while [[ $# -gt 0 ]]; do
     --filename)     FILENAME="$2"; shift 2 ;;
     --upload)       DO_UPLOAD=true; shift ;;
     --post-id)      POST_ID="$2"; shift 2 ;;
+    --model)        MODEL="$2"; shift 2 ;;
     *) echo '{"error":"Unknown argument: '"$1"'"}'; exit 1 ;;
   esac
 done
@@ -76,10 +78,17 @@ PYEOF
 )
 rm -f "$PROMPT_FILE"
 
->&2 echo "Step 1/5: Generating image via Replicate (flux-pro)..."
+# Resolve model to Replicate endpoint
+case "$MODEL" in
+  flux-pro)     REPLICATE_MODEL="black-forest-labs/flux-pro" ;;
+  flux-2-pro)   REPLICATE_MODEL="black-forest-labs/flux-2-pro" ;;
+  *)            REPLICATE_MODEL="black-forest-labs/flux-pro" ;;
+esac
+
+>&2 echo "Step 1/5: Generating image via Replicate (${MODEL})..."
 
 REPLICATE_RESPONSE=$(curl -s --max-time 90 \
-  -X POST "https://api.replicate.com/v1/models/black-forest-labs/flux-pro/predictions" \
+  -X POST "https://api.replicate.com/v1/models/${REPLICATE_MODEL}/predictions" \
   -H "Authorization: Bearer ${REPLICATE_KEY}" \
   -H "Content-Type: application/json" \
   -H "Prefer: wait" \

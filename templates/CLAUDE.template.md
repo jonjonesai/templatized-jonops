@@ -188,9 +188,65 @@ MEDIA_ID=$(echo "$IMAGE_JSON" | python3 -c "import json,sys; print(json.load(sys
 TINIFIED_URL=$(echo "$IMAGE_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)['tinified_url'])")
 ```
 
-Aspect ratios: Featured/Facebook: `16:9` | Pinterest: `2:3` | Instagram: `1:1`
+**Model selection (`--model` flag):**
+- `flux-pro` (default) — legacy Black Forest Labs model, ~$0.04/image, used by blog-writer and daily-contribution
+- `flux-2-pro` — flagship premium model, higher quality at 2 MP resolution, ~$0.08/image, used by all social subskills
+
+Aspect ratios: Featured/Facebook: `16:9` | Instagram square: `1:1` | Pinterest: `2:3` | TikTok/Reels: `9:16`
 
 **Image style guidance:** {{IMAGE_STYLE_GUIDANCE}}
+
+---
+
+## TikTok / Reels Video Pipeline
+Social Poster 2 (evening daily) renders short-form video for TikTok + Instagram Reels. One render, two platforms.
+
+**Orchestrator:** `generate-tiktok-video.sh` — chains slide generation → BGM → voiceover → FFmpeg render → WP upload.
+
+```bash
+VIDEO_JSON=$(bash /home/agent/project/generate-tiktok-video.sh \
+  --title "Video Title" \
+  --subtitle "{{BRAND_URL}}" \
+  --slides "Scene 1 description|Scene 2 description|Scene 3 description" \
+  --narration-text "Your narration text here. Keep it under 300 chars." \
+  --mood "upbeat,pop" \
+  --filename "tiktok-2026-04-10")
+```
+
+**Component helpers:**
+- `jamendo-download.sh` — fetches royalty-free BGM from Jamendo API, filters out NC/ND licenses (commercial-safe CC-BY / CC-BY-SA only). Caches tracks in `remotion/public/jamendo-cache/`.
+- `elevenlabs-tts.sh` — generates voiceover MP3 via ElevenLabs. Voice: configurable via `ELEVENLABS_VOICE_ID` env var (default: George). Model: `eleven_multilingual_v2`. Hard cap: **500 chars** (cost control). Target: 2–4 sentences, ~300 chars.
+- `remotion/render-ffmpeg.py` — FFmpeg-based composition renderer with Ken Burns zoompan, subtitles, and title/outro cards.
+
+**Jamendo mood mapping:**
+| Content angle | Mood tag |
+|---------------|----------|
+| Cultural / heritage / educational | `chill,world` |
+| Food / energetic / fun | `upbeat,pop` |
+| Nature / travel / landscapes | `ambient,electronic` |
+| Product drop / hype | `energetic,hiphop` |
+
+**Fallback chain:**
+1. ElevenLabs fails → render with BGM only (no voiceover)
+2. Jamendo fails → use cached fallback BGM
+3. `render-ffmpeg.py` fails → subskill falls back to 9:16 static image and sets `VIDEO_URL=""`
+4. Empty `VIDEO_URL` → Instagram Reel step falls back to 1:1 static image
+
+**License attribution:** Always append the Jamendo `bgm.attribution` string to TikTok and Instagram Reel captions. This is a CC-BY-SA license requirement.
+
+---
+
+## Social Poster Subskill Architecture
+Both social-poster-1 (blog repurpose) and social-poster-2 (researcher queue) are **orchestrators** that delegate to per-platform subskill files:
+
+| File | Platform | Aspect | Supports |
+|------|----------|--------|----------|
+| `.claude/skills/social-facebook.md` | Facebook | 16:9 | static image |
+| `.claude/skills/social-instagram.md` | Instagram | 1:1 or 9:16 | image (SP1) + Reel (SP2) |
+| `.claude/skills/social-pinterest.md` | Pinterest | 2:3 | static image |
+| `.claude/skills/social-tiktok.md` | TikTok | 9:16 | static (SP1) + video (SP2) |
+
+Orchestrators load subskills via the `Read` tool and execute their steps inline — **never nested Claude sessions**. Each subskill owns its own platform character limits, caption rules, hashtag strategy, and Metricool payload shape.
 
 ---
 
@@ -300,7 +356,7 @@ bash /home/agent/project/telegram-alert.sh "✅ [{{PROJECT_SLUG}}] skill-name �
 - The `.env` file at `/home/agent/project/.env` (if it exists) is NOT the primary source of credentials
 - **ALWAYS check `env | grep <KEY>` first** before looking for `.env` files
 - The host-level `.env` is at `/opt/jonops/projects/{{PROJECT_SLUG}}/.env` — Docker injects these as env vars into the container
-- Available env vars: `WP_URL`, `WP_USERNAME`, `WP_PASSWORD`, `AIRTABLE_API_KEY`, `AIRTABLE_BASE_ID`, `ASANA_API_KEY`, `REPLICATE_API`, `TINIFY_API`, `SENDY_API_KEY`, `SENDY_URL`, `METRICOOL_API_TOKEN`, `INSTANTLY_API_KEY`, `FIRECRAWL_API_KEY`, plus all `AIRTABLE_*_TABLE` vars
+- Available env vars: `WP_URL`, `WP_USERNAME`, `WP_PASSWORD`, `AIRTABLE_API_KEY`, `AIRTABLE_BASE_ID`, `ASANA_API_KEY`, `REPLICATE_API`, `TINIFY_API`, `SENDY_API_KEY`, `SENDY_URL`, `METRICOOL_API_TOKEN`, `METRICOOL_BLOG_ID`, `METRICOOL_USER_ID`, `INSTANTLY_API_KEY`, `FIRECRAWL_API_KEY`, `JAMENDO_CLIENT_ID` (video pipeline BGM), `ELEVENLABS_API` (video pipeline voiceover), `ELEVENLABS_VOICE_ID`, plus all `AIRTABLE_*_TABLE` vars
 
 ## Available Tools & Integrations
 - **Asana** — MCP server connected. Use `mcp__claude_ai_Asana__*` tools for task/project management (search, get, update, create tasks, comments, status updates)
@@ -310,7 +366,11 @@ bash /home/agent/project/telegram-alert.sh "✅ [{{PROJECT_SLUG}}] skill-name �
 - **Sendy** — REST API via curl for newsletter campaigns
 - **Metricool** — REST API via curl for social media scheduling
 - **Instantly** — REST API v2 via curl for email outreach campaigns
-- **generate-image.sh** — Local script: Replicate → Tinify → WordPress image pipeline
+- **generate-image.sh** — Local script: Replicate → Tinify → WordPress image pipeline. Supports `--model flux-pro` (default) and `--model flux-2-pro` (premium)
+- **generate-tiktok-video.sh** — Local script: full TikTok/Reels video pipeline (slides + BGM + voiceover + render + WP upload)
+- **jamendo-download.sh** — Local helper: royalty-free BGM from Jamendo (CC-BY / CC-BY-SA only)
+- **elevenlabs-tts.sh** — Local helper: text-to-speech via ElevenLabs (configurable voice, 500-char cap)
+- **remotion/render-ffmpeg.py** — FFmpeg-based composition renderer used by the video pipeline
 - **Bash, Python3** — Full shell and scripting access inside the container
 
 ## Memory Notes
