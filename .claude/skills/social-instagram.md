@@ -65,7 +65,7 @@ IMAGE_JSON=$(bash /home/agent/project/generate-image.sh \
   --filename "${FILENAME_SLUG}" \
   --upload)
 
-MEDIA_URL=$(echo "$IMAGE_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)['wp_media_url'])")
+MEDIA_URL=$(echo "$IMAGE_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)['cdn_url'])")
 ```
 
 ### REEL mode (SP2)
@@ -124,5 +124,6 @@ Return:
 - Hashtag block must be 20–30, placed at the END, not sprinkled in the body.
 - IMAGE mode: always 1:1, always `flux-2-pro`.
 - REEL mode: NEVER re-render — always reuse `VIDEO_URL` from the TikTok pipeline.
-- Always `--upload` so WP URL is permanent (image mode).
+- Always `--upload` so both WP and Cloudinary URLs are generated (image mode).
+- Always use `cdn_url` (not `wp_media_url`) for the Metricool `media` field — Meta APIs reject WebP.
 - **ALWAYS set `instagramData.type` explicitly** — `REEL` for video, `POST` for image. Metricool does NOT auto-detect. Missing this field causes the error *"Instagram does not allow single-video posts"*. `showReelOnFeed: true` is required for REEL to also appear in the main feed grid.

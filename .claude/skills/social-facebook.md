@@ -54,10 +54,10 @@ IMAGE_JSON=$(bash /home/agent/project/generate-image.sh \
   --filename "${FILENAME_SLUG}" \
   --upload)
 
-IMAGE_URL=$(echo "$IMAGE_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)['wp_media_url'])")
+IMAGE_URL=$(echo "$IMAGE_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)['cdn_url'])")
 ```
 
-Always use `wp_media_url` (permanent) — never `tinified_url`.
+Always use `cdn_url` (Cloudinary) for Metricool scheduling — never `wp_media_url`. WordPress may auto-convert uploads to WebP, which Meta's API rejects. `cdn_url` is a permanent JPEG on Cloudinary's CDN.
 
 ## Step 3: Schedule via Metricool
 ```bash
@@ -88,7 +88,8 @@ Return (to the parent orchestrator):
 ## Rules
 - **One call per invocation** — this subskill posts ONE image-based Facebook post.
 - Always use `flux-2-pro` for premium quality (the orchestrator pays for it).
-- Always `--upload` so the WP media URL is permanent.
+- Always `--upload` so both WP and Cloudinary URLs are generated.
+- Always use `cdn_url` (not `wp_media_url`) for the Metricool `media` field — Meta APIs reject WebP.
 - Caption must be 300–480 chars. Count before scheduling.
 - Hook must fit in first 80 chars.
 - Never hard-sell. Never use `{{placeholder}}` text.

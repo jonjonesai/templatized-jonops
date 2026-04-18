@@ -62,7 +62,7 @@ IMAGE_JSON=$(bash /home/agent/project/generate-image.sh \
   --filename "${FILENAME_SLUG}" \
   --upload)
 
-IMAGE_URL=$(echo "$IMAGE_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)['wp_media_url'])")
+IMAGE_URL=$(echo "$IMAGE_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)['cdn_url'])")
 ```
 
 ## Step 3: Resolve Pinterest board ID dynamically
@@ -130,5 +130,6 @@ Return:
 - If the Metricool boards list is empty, skip Pinterest gracefully and return `status: skipped, error: no_pinterest_boards`. Operator must (a) create a board on Pinterest, (b) ensure the account is connected as a **Pinterest Business** profile in Metricool, (c) re-authorize the Pinterest integration so Metricool syncs the board list.
 - Field names inside `pinterestData` are `pinTitle` and `pinLink` (not `title`/`link`). Also include `pinNewFormat: false`.
 - Always include an outbound `pinLink` in `pinterestData` — that's the whole point of Pinterest.
+- Always use `cdn_url` (not `wp_media_url`) for the Metricool `media` field — Cloudinary provides reliable, permanent JPEG URLs.
 - Front-load keywords in first 50 chars.
 - Evergreen framing only — never time-sensitive ("today only", "this week") language.

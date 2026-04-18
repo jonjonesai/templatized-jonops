@@ -112,6 +112,23 @@ TINIFY_API=xxxxxxxxxxxxxx
 
 **Free tier:** 500 images/month. More than enough for most use cases.
 
+#### Cloudinary (Social Media Image CDN)
+
+**Where to get it:** [console.cloudinary.com](https://console.cloudinary.com)
+
+1. Sign up for a free account
+2. Go to Dashboard → copy your Cloud Name, API Key, and API Secret
+
+```
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+```
+
+**Why it's needed:** Meta's APIs (Facebook, Instagram) need to fetch images from a URL when Metricool schedules posts. WordPress often auto-converts uploaded images to WebP, which Meta rejects. Cloudinary serves permanent JPEG URLs that Meta can always fetch.
+
+**Free tier:** 25,000 transformations + 25GB storage per month. More than enough for daily social posting.
+
 ### Recommended API Keys
 
 #### Telegram (Operator Notifications + Chat Interface)

@@ -66,7 +66,7 @@ IMAGE_JSON=$(bash /home/agent/project/generate-image.sh \
   --filename "${FILENAME_SLUG}" \
   --upload)
 
-MEDIA_URL=$(echo "$IMAGE_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)['wp_media_url'])")
+MEDIA_URL=$(echo "$IMAGE_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)['cdn_url'])")
 VIDEO_URL=""  # static mode has no video
 ```
 
@@ -163,7 +163,7 @@ Return the following so the parent orchestrator can pass `VIDEO_URL` to `social-
 - `metricool_response_code`: HTTP code
 
 ## Rules
-- **STATIC mode**: always 9:16, always `flux-2-pro`, always `--upload`.
+- **STATIC mode**: always 9:16, always `flux-2-pro`, always `--upload`. Use `cdn_url` for Metricool `media` field.
 - **VIDEO mode**: always 3–4 slides (render-script requires ≥2 but aim for 3–4 for narrative pacing).
 - Narration text is cost-capped at 500 chars. Write 2–4 sentences, ~300 chars target.
 - Always append Jamendo attribution to video captions — it's a license requirement for CC-BY-SA.

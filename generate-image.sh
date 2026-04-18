@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# generate-image.sh — Direct Image Pipeline: Replicate → Tinify → WordPress
+# generate-image.sh — Direct Image Pipeline: Replicate → Tinify → Cloudinary → WordPress
 # Immutable rule: NO image reaches WordPress without Tinify compression.
+# Immutable rule: Social media images use Cloudinary CDN URLs, NOT WordPress URLs.
+# WordPress may auto-convert uploads to WebP, which Meta (Facebook/Instagram) APIs reject.
 #
 # Usage:
 #   ./generate-image.sh \
@@ -10,7 +12,7 @@
 #     --upload        # optional: upload to WP media library
 #     --post-id 5592  # optional: set as featured image on this post
 #
-# Output: JSON to stdout with pipeline results.
+# Output: JSON to stdout with pipeline results (includes cdn_url for social media use).
 # Exit codes: 0 = success, 1 = pipeline failure (JSON error on stdout).
 
 set -euo pipefail
@@ -46,8 +48,11 @@ TINIFY_KEY="${TINIFY_API:?TINIFY_API not set}"
 WP_URL="${WP_URL:-}"
 WP_USERNAME="${WP_USERNAME:-}"
 WP_PASSWORD="${WP_PASSWORD:-}"
+CLOUDINARY_CLOUD_NAME="${CLOUDINARY_CLOUD_NAME:-}"
+CLOUDINARY_API_KEY="${CLOUDINARY_API_KEY:-}"
+CLOUDINARY_API_SECRET="${CLOUDINARY_API_SECRET:-}"
 
-LOCAL_PATH="/tmp/${FILENAME}.webp"
+LOCAL_PATH="/tmp/${FILENAME}.jpg"
 
 # Helper: output error JSON and exit
 die() {
@@ -69,7 +74,7 @@ print(json.dumps({
     "input": {
         "prompt": prompt,
         "aspect_ratio": sys.argv[2],
-        "output_format": "webp",
+        "output_format": "jpg",
         "output_quality": 90,
         "safety_tolerance": 5
     }
@@ -85,7 +90,7 @@ case "$MODEL" in
   *)            REPLICATE_MODEL="black-forest-labs/flux-pro" ;;
 esac
 
->&2 echo "Step 1/5: Generating image via Replicate (${MODEL})..."
+>&2 echo "Step 1/6: Generating image via Replicate (${MODEL})..."
 
 REPLICATE_RESPONSE=$(curl -s --max-time 90 \
   -X POST "https://api.replicate.com/v1/models/${REPLICATE_MODEL}/predictions" \
@@ -151,7 +156,7 @@ fi
 # ── Step 2: Compress via Tinify (MANDATORY GATE) ────────────────────────────
 # If this step fails, the pipeline STOPS. No uncompressed image ever reaches WP.
 
->&2 echo "Step 2/5: Compressing via Tinify..."
+>&2 echo "Step 2/6: Compressing via Tinify..."
 
 TINIFY_PAYLOAD=$(python3 -c "import json; print(json.dumps({'source': {'url': '$REPLICATE_IMAGE_URL'}}))")
 
@@ -192,7 +197,7 @@ print(f'{round((1-o/i)*100,1)}' if i > 0 else '0')
 
 # ── Step 3: Download compressed image ────────────────────────────────────────
 
->&2 echo "Step 3/5: Downloading compressed image..."
+>&2 echo "Step 3/6: Downloading compressed image..."
 
 curl -sf --max-time 30 \
   -u "api:${TINIFY_KEY}" \
@@ -206,13 +211,52 @@ fi
 FILE_SIZE=$(stat -c%s "$LOCAL_PATH" 2>/dev/null || stat -f%z "$LOCAL_PATH" 2>/dev/null || echo "?")
 >&2 echo "  Saved to ${LOCAL_PATH} (${FILE_SIZE} bytes)"
 
-# ── Step 4: Upload to WordPress (if --upload) ────────────────────────────────
+# ── Step 4: Upload to Cloudinary (social media CDN) ──────────────────────────
+# Cloudinary provides permanent JPEG URLs that Meta (Facebook/Instagram) can fetch.
+# WordPress may auto-convert uploads to WebP, which Meta APIs reject with:
+#   "photo_images.0: Value is not nullable (40002)"
+#   "The media could not be fetched from this URI"
+
+CDN_URL=""
+
+if [[ -n "$CLOUDINARY_CLOUD_NAME" && -n "$CLOUDINARY_API_KEY" && -n "$CLOUDINARY_API_SECRET" ]]; then
+  >&2 echo "Step 4/6: Uploading to Cloudinary CDN..."
+
+  CLOUD_TIMESTAMP=$(date +%s)
+  CLOUD_SIGNATURE=$(echo -n "format=jpg&public_id=${FILENAME}&timestamp=${CLOUD_TIMESTAMP}${CLOUDINARY_API_SECRET}" | sha1sum | cut -d' ' -f1)
+
+  CLOUDINARY_RESPONSE=$(curl -s --max-time 60 \
+    -X POST "https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload" \
+    -F "file=@${LOCAL_PATH}" \
+    -F "public_id=${FILENAME}" \
+    -F "api_key=${CLOUDINARY_API_KEY}" \
+    -F "timestamp=${CLOUD_TIMESTAMP}" \
+    -F "signature=${CLOUD_SIGNATURE}" \
+    -F "format=jpg")
+
+  CDN_URL=$(echo "$CLOUDINARY_RESPONSE" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+print(d.get('secure_url', d.get('url', '')))
+" 2>/dev/null)
+
+  if [[ -n "$CDN_URL" && "$CDN_URL" != "None" ]]; then
+    >&2 echo "  Cloudinary URL: ${CDN_URL}"
+  else
+    >&2 echo "  WARNING: Cloudinary upload failed — social posts will use WP URL (may cause Meta API errors)"
+    CDN_URL=""
+  fi
+else
+  >&2 echo "Step 4/6: Skipped (Cloudinary not configured — set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET)"
+fi
+
+# ── Step 5: Upload to WordPress (if --upload) ────────────────────────────────
 
 WP_MEDIA_ID=0
 WP_MEDIA_URL=""
 
 if [[ "$DO_UPLOAD" == "true" ]]; then
-  >&2 echo "Step 4/5: Uploading to WordPress..."
+  >&2 echo "Step 5/6: Uploading to WordPress..."
 
   if [[ -z "$WP_URL" || -z "$WP_USERNAME" || -z "$WP_PASSWORD" ]]; then
     die "WordPress credentials not set (WP_URL, WP_USERNAME, WP_PASSWORD)"
@@ -221,8 +265,8 @@ if [[ "$DO_UPLOAD" == "true" ]]; then
   UPLOAD_RESPONSE=$(curl -s --max-time 60 \
     -X POST "${WP_URL}/wp-json/wp/v2/media" \
     -u "${WP_USERNAME}:${WP_PASSWORD}" \
-    -H "Content-Disposition: attachment; filename=\"${FILENAME}.webp\"" \
-    -H "Content-Type: image/webp" \
+    -H "Content-Disposition: attachment; filename=\"${FILENAME}.jpg\"" \
+    -H "Content-Type: image/jpeg" \
     --data-binary "@${LOCAL_PATH}")
 
   read -r WP_MEDIA_ID WP_MEDIA_URL < <(echo "$UPLOAD_RESPONSE" | python3 -c "
@@ -240,10 +284,10 @@ print(mid, murl)
 
   >&2 echo "  Uploaded: Media ID ${WP_MEDIA_ID}"
 
-  # ── Step 5: Set as featured image (if --post-id) ──────────────────────────
+  # ── Step 6: Set as featured image (if --post-id) ──────────────────────────
 
   if [[ -n "$POST_ID" ]]; then
-    >&2 echo "Step 5/5: Setting featured image on post ${POST_ID}..."
+    >&2 echo "Step 6/6: Setting featured image on post ${POST_ID}..."
 
     curl -s --max-time 15 \
       -X POST "${WP_URL}/wp-json/wp/v2/posts/${POST_ID}" \
@@ -254,21 +298,24 @@ print(mid, murl)
     >&2 echo "  Featured image set."
   fi
 else
-  >&2 echo "Step 4/5: Skipped (no --upload flag)"
-  >&2 echo "Step 5/5: Skipped (no --post-id flag)"
+  >&2 echo "Step 5/6: Skipped (no --upload flag)"
+  >&2 echo "Step 6/6: Skipped (no --post-id flag)"
 fi
 
 # ── Output JSON ──────────────────────────────────────────────────────────────
 
-python3 - "$REPLICATE_IMAGE_URL" "$TINIFIED_URL" "$LOCAL_PATH" "$COMPRESSION_RATIO" "$WP_MEDIA_ID" "$WP_MEDIA_URL" << 'PYEOF'
+python3 - "$REPLICATE_IMAGE_URL" "$TINIFIED_URL" "$LOCAL_PATH" "$COMPRESSION_RATIO" "$WP_MEDIA_ID" "$WP_MEDIA_URL" "$CDN_URL" << 'PYEOF'
 import json, sys
+cdn_url = sys.argv[7]
+wp_url = sys.argv[6]
 result = {
     "replicate_url": sys.argv[1],
     "tinified_url": sys.argv[2],
     "local_path": sys.argv[3],
     "compression_ratio": sys.argv[4] + "%",
     "wp_media_id": int(sys.argv[5]) if sys.argv[5].isdigit() else 0,
-    "wp_media_url": sys.argv[6]
+    "wp_media_url": wp_url,
+    "cdn_url": cdn_url if cdn_url else wp_url
 }
 print(json.dumps(result, indent=2))
 PYEOF

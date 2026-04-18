@@ -114,6 +114,7 @@ You are a {{DOMAIN_EXPERTISE}} expert. {{DOMAIN_EXPERTISE_DESCRIPTION}}
 - **Sendy URL:** stored as SENDY_URL
 - **Sendy main list:** stored as SENDY_LIST_MAIN
 - **Metricool Blog ID:** stored as METRICOOL_BLOG_ID
+- **Cloudinary:** stored as CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET — used as CDN for social media images (Meta APIs reject WebP; WordPress may auto-convert)
 - **Active social platforms:** {{ACTIVE_SOCIAL_PLATFORMS}}
 - **Google My Business:** {{HAS_GMB}}
 - **LinkedIn:** {{HAS_LINKEDIN}}
@@ -171,12 +172,15 @@ No Fluent Forms configured. Skip form shortcodes in blog posts.
 ---
 
 ## Image Generation Pipeline
-All images go through `generate-image.sh` — Replicate → Tinify → WordPress.
+All images go through `generate-image.sh` — Replicate (JPEG) → Tinify → Cloudinary CDN → WordPress.
 
-**Rule: No image reaches WordPress without Tinify compression first.**
+**Rules:**
+- No image reaches WordPress without Tinify compression first.
+- Social media images use **Cloudinary CDN URLs** (`cdn_url`), NOT WordPress URLs. WordPress may auto-convert uploads to WebP, which Meta (Facebook/Instagram) APIs reject.
+- Blog featured images use `wp_media_url` (WebP conversion is fine for web visitors).
 
 ```bash
-# Generate + compress + upload to WP
+# Generate + compress + upload to Cloudinary + WP
 IMAGE_JSON=$(bash /home/agent/project/generate-image.sh \
   --prompt "{{IMAGE_STYLE_DESCRIPTION}}..." \
   --aspect-ratio "16:9" \
@@ -184,9 +188,17 @@ IMAGE_JSON=$(bash /home/agent/project/generate-image.sh \
   --upload \
   --post-id POST_ID)
 
+# For social media scheduling (Metricool) — always use cdn_url
+CDN_URL=$(echo "$IMAGE_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)['cdn_url'])")
+
+# For blog featured images — wp_media_id is fine
 MEDIA_ID=$(echo "$IMAGE_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)['wp_media_id'])")
-TINIFIED_URL=$(echo "$IMAGE_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)['tinified_url'])")
 ```
+
+**Output fields:**
+- `cdn_url` — Cloudinary JPEG URL (permanent, Meta-safe). Use this for all social media scheduling.
+- `wp_media_url` — WordPress media URL (may be WebP). Use this only for blog featured images.
+- `wp_media_id` — WordPress media ID (for setting featured images on posts).
 
 **Model selection (`--model` flag):**
 - `flux-pro` (default) — legacy Black Forest Labs model, ~$0.04/image, used by blog-writer and daily-contribution
@@ -356,7 +368,7 @@ bash /home/agent/project/telegram-alert.sh "✅ [{{PROJECT_SLUG}}] skill-name �
 - The `.env` file at `/home/agent/project/.env` (if it exists) is NOT the primary source of credentials
 - **ALWAYS check `env | grep <KEY>` first** before looking for `.env` files
 - The host-level `.env` is at `/opt/jonops/projects/{{PROJECT_SLUG}}/.env` — Docker injects these as env vars into the container
-- Available env vars: `WP_URL`, `WP_USERNAME`, `WP_PASSWORD`, `AIRTABLE_API_KEY`, `AIRTABLE_BASE_ID`, `ASANA_API_KEY`, `REPLICATE_API`, `TINIFY_API`, `SENDY_API_KEY`, `SENDY_URL`, `METRICOOL_API_TOKEN`, `METRICOOL_BLOG_ID`, `METRICOOL_USER_ID`, `INSTANTLY_API_KEY`, `FIRECRAWL_API_KEY`, `JAMENDO_CLIENT_ID` (video pipeline BGM), `ELEVENLABS_API` (video pipeline voiceover), `ELEVENLABS_VOICE_ID`, plus all `AIRTABLE_*_TABLE` vars
+- Available env vars: `WP_URL`, `WP_USERNAME`, `WP_PASSWORD`, `AIRTABLE_API_KEY`, `AIRTABLE_BASE_ID`, `ASANA_API_KEY`, `REPLICATE_API`, `TINIFY_API`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` (social media image CDN), `SENDY_API_KEY`, `SENDY_URL`, `METRICOOL_API_TOKEN`, `METRICOOL_BLOG_ID`, `METRICOOL_USER_ID`, `INSTANTLY_API_KEY`, `FIRECRAWL_API_KEY`, `JAMENDO_CLIENT_ID` (video pipeline BGM), `ELEVENLABS_API` (video pipeline voiceover), `ELEVENLABS_VOICE_ID`, plus all `AIRTABLE_*_TABLE` vars
 
 ## Available Tools & Integrations
 - **Asana** — MCP server connected. Use `mcp__claude_ai_Asana__*` tools for task/project management (search, get, update, create tasks, comments, status updates)
@@ -366,7 +378,8 @@ bash /home/agent/project/telegram-alert.sh "✅ [{{PROJECT_SLUG}}] skill-name �
 - **Sendy** — REST API via curl for newsletter campaigns
 - **Metricool** — REST API via curl for social media scheduling
 - **Instantly** — REST API v2 via curl for email outreach campaigns
-- **generate-image.sh** — Local script: Replicate → Tinify → WordPress image pipeline. Supports `--model flux-pro` (default) and `--model flux-2-pro` (premium)
+- **Cloudinary** — Image CDN for social media posts. `generate-image.sh` uploads to Cloudinary automatically and returns `cdn_url` (permanent JPEG). Use `cdn_url` for Metricool scheduling — never `wp_media_url` (WordPress may auto-convert to WebP, which Meta APIs reject)
+- **generate-image.sh** — Local script: Replicate (JPEG) → Tinify → Cloudinary CDN → WordPress. Supports `--model flux-pro` (default) and `--model flux-2-pro` (premium). Returns both `cdn_url` (social media) and `wp_media_url` (blog featured images)
 - **generate-tiktok-video.sh** — Local script: full TikTok/Reels video pipeline (slides + BGM + voiceover + render + WP upload)
 - **jamendo-download.sh** — Local helper: royalty-free BGM from Jamendo (CC-BY / CC-BY-SA only)
 - **elevenlabs-tts.sh** — Local helper: text-to-speech via ElevenLabs (configurable voice, 500-char cap)
