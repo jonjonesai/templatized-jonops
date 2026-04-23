@@ -18,7 +18,6 @@ export PATH="/home/agent/.local/bin:/usr/local/bin:/usr/bin:/bin"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_DIR="/home/agent/project/logs"
 LOCK_DIR="/home/agent/project/logs/locks"
-PROMPTS_DIR="/home/agent/prompts"
 
 # Ensure directories exist
 mkdir -p "$LOG_DIR" "$LOCK_DIR"
@@ -51,11 +50,11 @@ TASK_JSON=$(python3 "$SCRIPT_DIR/get-current-task.py" $SLOT_ARGS 2>/dev/null) ||
 }
 
 TASK_NAME=$(echo "$TASK_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)['task'])")
-PROMPT_FILE=$(echo "$TASK_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)['prompt'])")
+SKILL_FILE=$(echo "$TASK_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)['skill'])")
 DESCRIPTION=$(echo "$TASK_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin)['description'])")
 
 echo "[$TIMESTAMP] Task: $TASK_NAME"
-echo "[$TIMESTAMP] Prompt: $PROMPT_FILE"
+echo "[$TIMESTAMP] Skill: $SKILL_FILE"
 echo "[$TIMESTAMP] Description: $DESCRIPTION"
 
 # ---------------------------------------------------------------
@@ -78,12 +77,12 @@ echo "$$|$TIMESTAMP" > "$LOCK_FILE"
 # Clean up stale lock files from previous days
 find "$LOCK_DIR" -name "*.lock" -not -name "${WITA_DATE}*" -delete 2>/dev/null || true
 
-PROMPT_PATH="$PROMPTS_DIR/$PROMPT_FILE"
+SKILL_PATH="/home/agent/project/.claude/skills/$SKILL_FILE"
 LOG_FILE="$LOG_DIR/${TIMESTAMP}_${TASK_NAME}.log"
 
-# Verify prompt file exists
-if [ ! -f "$PROMPT_PATH" ]; then
-    echo "[$TIMESTAMP] ERROR: Prompt file not found: $PROMPT_PATH"
+# Verify skill file exists
+if [ ! -f "$SKILL_PATH" ]; then
+    echo "[$TIMESTAMP] ERROR: Skill file not found: $SKILL_PATH"
     exit 1
 fi
 
@@ -125,7 +124,7 @@ OVERRIDE_FILE="/home/agent/project/overrides/${TASK_NAME}.md"
 if [ -f "$OVERRIDE_FILE" ]; then
     TASK_OVERRIDES="
 IMPORTANT — READ OVERRIDE FILE FIRST:
-Read the file at $OVERRIDE_FILE BEFORE reading the main prompt.
+Read the file at $OVERRIDE_FILE BEFORE reading the main skill file.
 The overrides in that file take priority over the default skill instructions.
 "
 fi
@@ -137,7 +136,7 @@ TASK: $DESCRIPTION
 TIME SLOT: $WITA_TIME WITA
 DATE: $(TZ='Asia/Makassar' date '+%Y-%m-%d')
 $ASANA_INBOX_INSTRUCTION$TASK_OVERRIDES
-Read the prompt file at $PROMPT_PATH and execute the COMPLETE pipeline described in it.
+Read the skill file at $SKILL_PATH and execute the COMPLETE pipeline described in it.
 Follow every step. Do not skip steps. Do not ask for confirmation — execute autonomously.
 
 IMPORTANT RULES:
@@ -147,7 +146,7 @@ IMPORTANT RULES:
 - Log completed work to Asana
 - Update observations.md when done
 
-Start by reading the prompt file, then execute."
+Start by reading the skill file, then execute."
 
 echo "[$TIMESTAMP] Invoking Claude Code..."
 echo "[$TIMESTAMP] Log file: $LOG_FILE"
@@ -172,7 +171,7 @@ unset CLAUDECODE
 {
     echo "========================================================"
     echo "DISPATCH: $TASK_NAME | $WITA_DATE $WITA_TIME WITA"
-    echo "Prompt: $PROMPT_PATH"
+    echo "Skill: $SKILL_PATH"
     echo "Claude: $(which claude 2>/dev/null || echo 'NOT FOUND') $(claude --version 2>&1 | head -1 || echo 'unknown')"
     echo "CLAUDECODE_WAS: $CLAUDECODE_WAS"
     echo "PID: $$"
