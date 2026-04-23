@@ -37,6 +37,7 @@ from claude_agent_sdk import (
     AssistantMessage,
     ClaudeAgentOptions,
     ClaudeSDKClient,
+    ProcessError,
     ResultMessage,
     SystemMessage,
     TextBlock,
@@ -233,12 +234,15 @@ async def run_agent(user_message: str, resume_session_id: Optional[str]) -> dict
       cost_usd: float
       duration_ms: int
     """
-    options = ClaudeAgentOptions(
-        cwd=str(PROJECT_DIR),
-        permission_mode="bypassPermissions",
-        setting_sources=["project"],  # loads CLAUDE.md, .claude/settings.json
-        resume=resume_session_id,
-    )
+    def _build_options(resume: Optional[str]) -> ClaudeAgentOptions:
+        return ClaudeAgentOptions(
+            cwd=str(PROJECT_DIR),
+            permission_mode="bypassPermissions",
+            setting_sources=["project"],  # loads CLAUDE.md, .claude/settings.json
+            resume=resume,
+        )
+
+    options = _build_options(resume_session_id)
 
     t0 = time.time()
     result = {
@@ -251,8 +255,8 @@ async def run_agent(user_message: str, resume_session_id: Optional[str]) -> dict
     }
     collected_text: list[str] = []
 
-    try:
-        async with ClaudeSDKClient(options=options) as client:
+    async def _execute(opts: ClaudeAgentOptions) -> None:
+        async with ClaudeSDKClient(options=opts) as client:
             await client.query(user_message)
             async for message in client.receive_response():
                 if isinstance(message, SystemMessage) and message.subtype == "init":
@@ -283,6 +287,26 @@ async def run_agent(user_message: str, resume_session_id: Optional[str]) -> dict
                     if getattr(message, "result", None):
                         result["text"] = message.result
 
+    try:
+        await _execute(options)
+    except ProcessError as e:
+        # Stale session_id (e.g. after container recreate) makes the SDK
+        # subprocess exit non-zero on resume. Retry once with a fresh session.
+        if resume_session_id is not None:
+            log.warning(
+                "Resume of session %s failed (%s); retrying with fresh session",
+                resume_session_id, e,
+            )
+            result["session_id"] = None
+            collected_text.clear()
+            try:
+                await _execute(_build_options(None))
+            except Exception as e2:
+                log.exception("Agent SDK error after resume retry")
+                result["text"] = f"⚠️ Agent error after retry: {type(e2).__name__}: {e2}"
+        else:
+            log.exception("Agent SDK error")
+            result["text"] = f"⚠️ Agent error: {type(e).__name__}: {e}"
     except Exception as e:
         log.exception("Agent SDK error")
         result["text"] = f"⚠️ Agent error: {type(e).__name__}: {e}"

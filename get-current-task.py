@@ -10,7 +10,7 @@ Usage:
   python3 get-current-task.py --list       # List all scheduled tasks
 
 Output (JSON):
-  {"task": "blog-writer", "prompt": "blog-writer.md", "description": "...", "slot": "00:00"}
+  {"task": "blog-writer", "skill": "blog-writer.md", "description": "...", "slot": "00:00"}
   or exits with code 1 if no task matches
 """
 import json
