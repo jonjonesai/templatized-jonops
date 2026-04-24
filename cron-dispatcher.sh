@@ -167,6 +167,68 @@ unset CLAUDECODE
 # ---------------------------------------------------------------
 # (Clean HOME approach removed 2026-03-14 — was preventing token refresh)
 
+# ---------------------------------------------------------------
+# Pre-flight auth check — fail fast instead of hanging for 60min
+# Check OAuth token expiry from credentials file. If token is
+# expired OR will expire within 2 hours, proactively refresh it.
+# If no ANTHROPIC_API_KEY fallback, abort early with Telegram alert.
+#
+# Why 2-hour buffer: Access tokens last ~24h. Some tasks run up to
+# 90 minutes. Refreshing early prevents mid-task expiry and avoids
+# the window where a token expires between scheduled tasks.
+# ---------------------------------------------------------------
+CREDS_FILE="$HOME/.claude/.credentials.json"
+AUTH_OK=true
+BUFFER_MS=7200000  # 2 hours in milliseconds
+
+if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+    # API key set — no expiry concern
+    :
+elif [ -f "$CREDS_FILE" ]; then
+    EXPIRES_AT=$(python3 -c "
+import json, sys, time
+try:
+    d = json.load(open('$CREDS_FILE'))
+    exp = d.get('claudeAiOauth', {}).get('expiresAt', 0)
+    print(int(exp))
+except: print(0)
+" 2>/dev/null)
+    NOW_MS=$(python3 -c "import time; print(int(time.time() * 1000))")
+    THRESHOLD=$((NOW_MS + BUFFER_MS))
+    if [ "$EXPIRES_AT" -gt 0 ] && [ "$THRESHOLD" -gt "$EXPIRES_AT" ]; then
+        # Token expired or expiring within 2h — proactively refresh
+        # (the CLI refreshes the token on any invocation if refresh token is valid)
+        if claude --version > /dev/null 2>&1; then
+            # Re-read expiry after refresh attempt
+            EXPIRES_AT=$(python3 -c "
+import json
+d = json.load(open('$CREDS_FILE'))
+print(int(d.get('claudeAiOauth', {}).get('expiresAt', 0)))
+" 2>/dev/null)
+            if [ "$NOW_MS" -gt "$EXPIRES_AT" ]; then
+                AUTH_OK=false
+            fi
+        else
+            AUTH_OK=false
+        fi
+    fi
+else
+    AUTH_OK=false
+fi
+
+if [ "$AUTH_OK" = "false" ]; then
+    {
+        echo "========================================================"
+        echo "DISPATCH: $TASK_NAME | $WITA_DATE $WITA_TIME WITA"
+        echo "AUTH CHECK FAILED — Claude OAuth token expired and refresh failed."
+        echo "Re-authenticate: claude login"
+        echo "========================================================"
+    } > "$LOG_FILE"
+    echo "[$TIMESTAMP] ABORTED: Claude auth check failed. See $LOG_FILE"
+    bash /home/agent/project/telegram-alert.sh "AUTH FAILURE — $TASK_NAME skipped. OAuth token expired. Run: claude login" 2>/dev/null || true
+    exit 1
+fi
+
 # Write diagnostic header directly to the task log file
 {
     echo "========================================================"
