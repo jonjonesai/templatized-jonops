@@ -51,6 +51,11 @@ CHECK_INTERVAL = 30        # seconds between clock checks
 TOLERANCE_MINUTES = 2      # fire if within N minutes of scheduled time
 TASK_TIMEOUT = 1800        # max seconds per task (30 min)
 
+# Token refresh config
+CREDS_FILE = Path(os.environ.get("HOME", "/home/agent")) / ".claude" / ".credentials.json"
+TOKEN_REFRESH_BUFFER_MS = 7_200_000   # refresh if <2 hours remain
+TOKEN_CHECK_INTERVAL = 1800           # check token every 30 minutes
+
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
@@ -168,6 +173,68 @@ def get_next_task():
 
 
 # ---------------------------------------------------------------------------
+# Proactive OAuth token refresh
+# ---------------------------------------------------------------------------
+# Claude OAuth access tokens expire after ~24h. Rather than waiting for a
+# task to fail on an expired token, we proactively refresh when <2h remain.
+# The refresh token (sk-ant-ort01-*) is long-lived; calling `claude --version`
+# triggers the CLI's built-in token renewal flow at near-zero cost.
+# ---------------------------------------------------------------------------
+_last_token_check = 0
+
+def refresh_token_if_needed():
+    """Check OAuth token expiry; proactively refresh if expiring within 2h."""
+    global _last_token_check
+    now_epoch = time.time()
+
+    # Rate-limit checks to avoid hammering the filesystem
+    if now_epoch - _last_token_check < TOKEN_CHECK_INTERVAL:
+        return
+    _last_token_check = now_epoch
+
+    # Skip if ANTHROPIC_API_KEY is set (no OAuth needed)
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return
+
+    if not CREDS_FILE.exists():
+        return
+
+    try:
+        with open(CREDS_FILE) as f:
+            creds = json.load(f)
+        expires_at = creds.get("claudeAiOauth", {}).get("expiresAt", 0)
+        if not expires_at:
+            return
+
+        now_ms = int(now_epoch * 1000)
+        remaining_ms = expires_at - now_ms
+
+        if remaining_ms > TOKEN_REFRESH_BUFFER_MS:
+            return  # Token still fresh
+
+        remaining_hours = max(0, remaining_ms / 3_600_000)
+        log(f"OAuth token expires in {remaining_hours:.1f}h — proactively refreshing")
+
+        child_env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
+        child_env["HOME"] = str(CREDS_FILE.parent.parent)
+        result = subprocess.run(
+            ["claude", "--version"],
+            capture_output=True, timeout=30, env=child_env,
+        )
+        if result.returncode == 0:
+            # Verify the token was actually refreshed
+            with open(CREDS_FILE) as f:
+                new_creds = json.load(f)
+            new_expires = new_creds.get("claudeAiOauth", {}).get("expiresAt", 0)
+            new_remaining_h = max(0, (new_expires - int(time.time() * 1000)) / 3_600_000)
+            log(f"OAuth token refreshed — new expiry in {new_remaining_h:.1f}h")
+        else:
+            log("OAuth token refresh failed (claude --version returned non-zero)", "WARN")
+    except Exception as e:
+        log(f"OAuth token refresh error: {e}", "WARN")
+
+
+# ---------------------------------------------------------------------------
 # Process tree management
 # ---------------------------------------------------------------------------
 def _kill_tree(pid):
@@ -261,6 +328,9 @@ def run_scheduler():
                 current_date = today
                 slots = get_all_daily_slots()
                 log(f"Today's slots: {', '.join(slots)}")
+
+            # Proactively refresh OAuth token before it expires
+            refresh_token_if_needed()
 
             current_minutes = now.hour * 60 + now.minute
             day_name = now.strftime("%A").lower()
