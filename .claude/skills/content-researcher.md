@@ -1,6 +1,6 @@
 ---
 skill: content-researcher
-version: 1.1.0
+version: 1.1.1
 cadence: weekly (Monday)
 trigger: cron
 airtable_reads: [Keywords]
@@ -34,7 +34,7 @@ Take the top queued keywords from the Keywords table and research content angles
 
 ### Step 1: Read latest Market Intelligence
 ```bash
-curl -s "https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_MARKET_INTEL_TABLE}?sort%5B0%5D%5Bfield%5D=Month&sort%5B0%5D%5Bdirection%5D=desc&maxRecords=1" \
+curl -s "https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_MARKET_INTEL_TABLE}?sort%5B0%5D%5Bfield%5D=Scan%20Date&sort%5B0%5D%5Bdirection%5D=desc&maxRecords=1" \
   -H "Authorization: Bearer ${AIRTABLE_API_KEY}"
 ```
 Use **Content Gaps**, **Key Trends**, and **Competitor Moves** to shape content angles. Prioritize angles that fill gaps competitors are covering but we aren't.

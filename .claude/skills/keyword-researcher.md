@@ -1,6 +1,6 @@
 ---
 skill: keyword-researcher
-version: 1.2.0
+version: 1.2.1
 cadence: weekly (Monday 08:00)
 trigger: cron
 airtable_reads: [Keywords, Market Intelligence]
@@ -35,7 +35,7 @@ Research and queue 10 new target keywords for content. Uses Market Intelligence 
 
 ### Step 1: Read latest Market Intelligence
 ```bash
-curl -s "https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_MARKET_INTEL_TABLE}?sort%5B0%5D%5Bfield%5D=Month&sort%5B0%5D%5Bdirection%5D=desc&maxRecords=1" \
+curl -s "https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_MARKET_INTEL_TABLE}?sort%5B0%5D%5Bfield%5D=Scan%20Date&sort%5B0%5D%5Bdirection%5D=desc&maxRecords=1" \
   -H "Authorization: Bearer ${AIRTABLE_API_KEY}"
 ```
 Use **Keyword Opportunities** and **Content Gaps** to prioritize research. Use **Key Trends** to identify timely topics.

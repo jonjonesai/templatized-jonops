@@ -1,6 +1,6 @@
 ---
 skill: market-intelligence
-version: 1.0.0
+version: 1.1.0
 cadence: weekly (Monday 02:30)
 trigger: cron
 airtable_reads: []
@@ -76,12 +76,13 @@ Produce structured analysis:
 **Action Items** — specific recommendations for blog-writer and keyword-researcher next month
 
 ### Step 5: Push to Market Intelligence table
+Use today's full ISO date (`YYYY-MM-DD`) as the Scan Date — every run gets a unique sortable key. Do NOT pin to first-of-month.
 ```bash
 curl -s --retry 3 --retry-delay 2 -X POST "https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_MARKET_INTEL_TABLE}" \
   -H "Authorization: Bearer ${AIRTABLE_API_KEY}" \
   -H "Content-Type: application/json" \
   -d '{"fields": {
-    "Month": "[YYYY-MM-01]",
+    "Scan Date": "[YYYY-MM-DD — today's date when this run executes]",
     "Key Trends": "[trends text]",
     "Top SERP Players": "[players text]",
     "Content Gaps": "[gaps text]",
