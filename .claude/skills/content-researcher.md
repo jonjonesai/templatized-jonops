@@ -1,6 +1,6 @@
 ---
 skill: content-researcher
-version: 1.0.0
+version: 1.1.0
 cadence: weekly (Monday)
 trigger: cron
 airtable_reads: [Keywords]
@@ -39,18 +39,40 @@ curl -s "https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_MARKET_INTEL
 ```
 Use **Content Gaps**, **Key Trends**, and **Competitor Moves** to shape content angles. Prioritize angles that fill gaps competitors are covering but we aren't.
 
-### Step 2: Read top 5 queued keywords
+### Step 2: Read top 10 queued keywords (read more than you need so Step 2.5 can dedup)
 ```bash
-curl -s --retry 3 --retry-delay 2 "https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_KEYWORDS_TABLE}?filterByFormula=Status='Queue'&sort[0][field]=Search%20Volume&sort[0][direction]=desc&maxRecords=5" \
+curl -s --retry 3 --retry-delay 2 "https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_KEYWORDS_TABLE}?filterByFormula=Status='Queue'&sort[0][field]=Search%20Volume&sort[0][direction]=desc&maxRecords=10" \
   -H "Authorization: Bearer ${AIRTABLE_API_KEY}"
 ```
 
-### Step 3: Check Content Calendar — avoid duplicates
+### Step 2.5: Deduplicate candidates by SERP overlap and intent
+
+This step is mandatory. Group the 10 candidates into clusters of near-duplicates. Two keywords belong in the same cluster if any of the following are true:
+
+- They target the same Google SERP (e.g., `shopify vs woocommerce` and `woocommerce vs shopify` literally hit identical results).
+- They target the same intent with different phrasing (e.g., `shopify print-on-demand` and `print on demand for shopify`).
+- They are minor variations that would produce overlapping content (e.g., `print on demand business` and `print on demand for business`).
+
+Within each cluster, **keep the keyword with the lowest Difficulty score**. If Difficulty ties, prefer the higher Search Volume. Intuition: when two keywords serve the same audience, win the one Google considers easier to rank for.
+
+For every losing cluster member, **mark its row in the Keywords table as Status=`Skipped`** with a Note explaining why:
+```bash
+curl -s --retry 3 --retry-delay 2 -X PATCH "https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_KEYWORDS_TABLE}/[record_id]" \
+  -H "Authorization: Bearer ${AIRTABLE_API_KEY}" \
+  -H "Content-Type: application/json" \
+  -d '{"fields": {"Status": "Skipped", "Notes": "Skipped: near-duplicate of [winner_keyword] (lower difficulty wins)"}}'
+```
+
+This is mandatory because writing multiple blog posts on near-duplicate keywords is keyword stuffing. Google penalizes it. It also wastes the content budget. Distinct subintents may stay separate (e.g., `print on demand t-shirt business` is a distinct subniche from `print on demand business`) but obvious phrasing variants must be deduped.
+
+After dedup, you will have between 3 and 10 distinct keywords. Pick the top 5 by Search Volume for the rest of this run.
+
+### Step 3: Check Content Calendar — avoid duplicates against what is already queued for writing
 ```bash
 curl -s --retry 3 --retry-delay 2 "https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_CONTENT_TABLE}?fields[]=Keyword" \
   -H "Authorization: Bearer ${AIRTABLE_API_KEY}"
 ```
-Skip any keyword already in Content Calendar.
+Skip any deduped keyword that already exists in Content Calendar (a previous run already queued it). Step 2.5 handles same-run dedup; this step handles cross-run dedup.
 
 ### Step 4: For each keyword — SERP research
 DataForSEO SERP organic results for the keyword:
@@ -93,7 +115,7 @@ curl -s --retry 3 --retry-delay 2 -X POST "https://api.airtable.com/v0/${AIRTABL
   -d '{"fields": {
     "Title": "[working title]",
     "Keyword": "[keyword]",
-    "Status": "Queue",
+    "Status": "Queued",
     "Category": "[category from CLAUDE.md WP_CATEGORIES]",
     "Notes": "[gap analysis + H2 outline + word count + internal links + CTA]"
   }}'
@@ -118,6 +140,8 @@ SKILL_RESULT: success | [N] content briefs added to Content Calendar | keywords:
 - Budget cap: max 10 DataForSEO SERP calls + 15 Firecrawl scrapes per run
 
 ## Rules
-- Never add duplicate keywords to Content Calendar
-- Always identify a genuine gap — don't just summarize what competitors wrote
-- Cap at 5 keywords per run
+- Never add duplicate keywords to Content Calendar.
+- Never produce briefs for near-duplicate keywords in the same run. Step 2.5 dedup is mandatory. Writing multiple blog posts on near-duplicate keywords is keyword stuffing, and Google penalizes it.
+- When a near-duplicate cluster exists in the queue, the lowest-Difficulty member wins. Mark losers as `Skipped` with a Note pointing to the winner.
+- Always identify a genuine content gap. Do not just summarize what competitors wrote.
+- Read up to 10 candidates per run. Produce up to 5 briefs per run after dedup.
