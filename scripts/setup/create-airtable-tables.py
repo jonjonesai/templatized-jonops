@@ -282,7 +282,7 @@ TABLES = [
     {
         "name": "Market Intelligence",
         "fields": [
-            {"name": "Month", "type": "date", "options": {"dateFormat": {"name": "iso"}}},
+            {"name": "Scan Date", "type": "date", "options": {"dateFormat": {"name": "iso"}}},
             {"name": "Key Trends", "type": "multilineText"},
             {"name": "Top SERP Players", "type": "multilineText"},
             {"name": "Content Gaps", "type": "multilineText"},
