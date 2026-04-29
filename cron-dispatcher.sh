@@ -197,8 +197,9 @@ except: print(0)
     THRESHOLD=$((NOW_MS + BUFFER_MS))
     if [ "$EXPIRES_AT" -gt 0 ] && [ "$THRESHOLD" -gt "$EXPIRES_AT" ]; then
         # Token expired or expiring within 2h — proactively refresh
-        # (the CLI refreshes the token on any invocation if refresh token is valid)
-        if claude --version > /dev/null 2>&1; then
+        # (a real API call via `claude --print -p ping` triggers the refresh flow;
+        #  `claude --version` does NOT — it's metadata-only and never hits the API)
+        if claude --print -p ping < /dev/null > /dev/null 2>&1; then
             # Re-read expiry after refresh attempt
             EXPIRES_AT=$(python3 -c "
 import json
