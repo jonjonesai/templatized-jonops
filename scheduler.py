@@ -116,23 +116,23 @@ def get_task_for_slot(slot, day_name):
         monthly_key = f"1st_{slot}"
         if monthly_key in monthly:
             task = monthly[monthly_key].copy()
-            if not task.get("active", True):
-                return None
-            task["slot"] = slot
-            task["schedule_type"] = "monthly"
-            return task
+            if task.get("active", True):
+                task["slot"] = slot
+                task["schedule_type"] = "monthly"
+                return task
+            # active: false → fall through to weekly/daily
 
     # Weekly override
     weekly = schedule.get("recurring", {}).get("weekly", {})
     weekly_key = f"{day_name}_{slot}"
     if weekly_key in weekly:
         task = weekly[weekly_key].copy()
-        if not task.get("active", True):
-            return None
-        task["slot"] = slot
-        task["schedule_type"] = "weekly"
-        task["day"] = day_name
-        return task
+        if task.get("active", True):
+            task["slot"] = slot
+            task["schedule_type"] = "weekly"
+            task["day"] = day_name
+            return task
+        # active: false → fall through to daily
 
     # Daily fallback
     daily = schedule.get("recurring", {}).get("daily", {})
@@ -177,8 +177,9 @@ def get_next_task():
 # ---------------------------------------------------------------------------
 # Claude OAuth access tokens expire after ~24h. Rather than waiting for a
 # task to fail on an expired token, we proactively refresh when <2h remain.
-# The refresh token (sk-ant-ort01-*) is long-lived; calling `claude --version`
-# triggers the CLI's built-in token renewal flow at near-zero cost.
+# The refresh token (sk-ant-ort01-*) is long-lived; making a real API call via
+# `claude --print -p ping` triggers the CLI's token renewal flow.
+# `claude --version` does NOT — it's metadata-only and never hits the API.
 # ---------------------------------------------------------------------------
 _last_token_check = 0
 
@@ -218,8 +219,9 @@ def refresh_token_if_needed():
         child_env = {k: v for k, v in os.environ.items() if k != "CLAUDECODE"}
         child_env["HOME"] = str(CREDS_FILE.parent.parent)
         result = subprocess.run(
-            ["claude", "--version"],
+            ["claude", "--print", "-p", "ping"],
             capture_output=True, timeout=30, env=child_env,
+            input="",
         )
         if result.returncode == 0:
             # Verify the token was actually refreshed
@@ -229,7 +231,7 @@ def refresh_token_if_needed():
             new_remaining_h = max(0, (new_expires - int(time.time() * 1000)) / 3_600_000)
             log(f"OAuth token refreshed — new expiry in {new_remaining_h:.1f}h")
         else:
-            log("OAuth token refresh failed (claude --version returned non-zero)", "WARN")
+            log("OAuth token refresh failed (claude --print -p ping returned non-zero)", "WARN")
     except Exception as e:
         log(f"OAuth token refresh error: {e}", "WARN")
 
