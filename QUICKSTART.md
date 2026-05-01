@@ -26,10 +26,13 @@ pip3 install pyairtable
 python3 scripts/setup/create-airtable-tables.py
 # Copy the output table IDs into .env
 
-# 5. Launch
+# 5. Fix volume permissions (chown to UID 1001:jonops-shared so the container can write)
+sudo bash scripts/setup/fix-perms.sh
+
+# 6. Launch
 docker compose up -d
 
-# 6. Verify
+# 7. Verify
 docker compose logs -f
 ```
 
@@ -59,7 +62,7 @@ docker compose exec jonops claude "Run the daily-watchdog skill"
 
 ## Troubleshooting
 
-**Container won't start:** Check `docker compose logs` for errors. Usually a missing env var.
+**Container won't start:** Check `docker compose logs` for errors. Usually a missing env var, or a `PermissionError` writing logs/PID — re-run `sudo bash scripts/setup/fix-perms.sh`.
 
 **Skills failing:** Check `logs/scheduler.log` inside the container.
 
