@@ -39,6 +39,35 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
+# Sanity guards. If the user accidentally passes a path like /opt/jonops or /,
+# this script would recurse over multiple businesses' trees and clobber every
+# .env file in sight. Refuse unless the target looks like a single business's
+# project root.
+PROJECT_DIR_RESOLVED=$(realpath "$PROJECT_DIR")
+
+if [ "$(basename "$PROJECT_DIR_RESOLVED")" != "project" ]; then
+  echo "[fix-perms] ERROR: target must be a directory named 'project'." >&2
+  echo "[fix-perms]        Got: $PROJECT_DIR_RESOLVED" >&2
+  echo "[fix-perms]        Expected: /opt/.../<business>/project" >&2
+  exit 1
+fi
+
+PARENT_DIR=$(dirname "$PROJECT_DIR_RESOLVED")
+if [ ! -f "$PARENT_DIR/docker-compose.yml" ] && [ ! -f "$PARENT_DIR/.env" ]; then
+  echo "[fix-perms] ERROR: $PARENT_DIR has no docker-compose.yml or .env file." >&2
+  echo "[fix-perms]        This doesn't look like a JonOps business directory." >&2
+  echo "[fix-perms]        Refusing to recurse — pass an explicit per-business project path." >&2
+  exit 1
+fi
+
+# Prevent operating on a path so shallow that multiple businesses are below it.
+SUBDIRS=$(find "$PROJECT_DIR_RESOLVED" -maxdepth 2 -name "docker-compose.yml" 2>/dev/null | wc -l)
+if [ "$SUBDIRS" -gt 0 ]; then
+  echo "[fix-perms] ERROR: target contains its own docker-compose.yml descendants." >&2
+  echo "[fix-perms]        Refusing — this looks like a shared root, not a single business." >&2
+  exit 1
+fi
+
 # 1. Ensure the shared group exists.
 if ! getent group "$SHARED_GROUP" >/dev/null; then
   echo "[fix-perms] Creating group '$SHARED_GROUP'..."
