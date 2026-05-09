@@ -477,6 +477,56 @@ TABLES = [
             {"name": "Notes", "type": "multilineText"},
         ]
     },
+    {
+        "name": "GSC Opportunities",
+        "fields": [
+            {"name": "Date", "type": "date", "options": {"dateFormat": {"name": "iso"}}},
+            {"name": "Brand", "type": "singleLineText"},
+            {"name": "Type", "type": "singleSelect", "options": {"choices": [
+                {"name": "CTR-Rewrite", "color": "blueLight2"},
+                {"name": "Content-Refresh", "color": "purpleLight2"},
+                {"name": "Brand-Defense", "color": "redLight2"},
+            ]}},
+            {"name": "Page URL", "type": "url"},
+            {"name": "Target Query", "type": "singleLineText"},
+            {"name": "Current Title", "type": "singleLineText"},
+            {"name": "Current Description", "type": "multilineText"},
+            {"name": "Current CTR", "type": "number", "options": {"precision": 4}},
+            {"name": "Current Position", "type": "number", "options": {"precision": 1}},
+            {"name": "Impressions", "type": "number", "options": {"precision": 0}},
+            {"name": "Suggested Action", "type": "multilineText"},
+            {"name": "Suggested Title", "type": "singleLineText"},
+            {"name": "Suggested Description", "type": "multilineText"},
+            {"name": "Confidence", "type": "number", "options": {"precision": 2}},
+            {"name": "Status", "type": "singleSelect", "options": {"choices": [
+                {"name": "Pending Review", "color": "yellowLight2"},
+                {"name": "Auto-Applied", "color": "greenLight2"},
+                {"name": "Skipped", "color": "grayLight2"},
+                {"name": "Apply-Failed", "color": "redLight2"},
+                {"name": "Rolled-Back", "color": "orangeLight2"},
+            ]}},
+            {"name": "Notes", "type": "multilineText"},
+            {"name": "Snapshot Path", "type": "singleLineText"},
+        ]
+    },
+    {
+        "name": "GA4 Insights",
+        "fields": [
+            {"name": "Date", "type": "date", "options": {"dateFormat": {"name": "iso"}}},
+            {"name": "Brand", "type": "singleLineText"},
+            {"name": "Source/Medium", "type": "singleLineText"},
+            {"name": "Sessions", "type": "number", "options": {"precision": 0}},
+            {"name": "Sessions Prior 30d", "type": "number", "options": {"precision": 0}},
+            {"name": "Conversions", "type": "number", "options": {"precision": 0}},
+            {"name": "Conversions Prior 30d", "type": "number", "options": {"precision": 0}},
+            {"name": "Trend", "type": "singleSelect", "options": {"choices": [
+                {"name": "Up", "color": "greenLight2"},
+                {"name": "Flat", "color": "grayLight2"},
+                {"name": "Down", "color": "redLight2"},
+            ]}},
+            {"name": "Notes", "type": "multilineText"},
+        ]
+    },
 ]
 
 # ─── MAIN ─────────────────────────────────────────────────────────────────────
@@ -502,6 +552,8 @@ ENV_VAR_MAP = {
     "Social Mining Queue": "AIRTABLE_SOCIAL_MINING_QUEUE_TABLE",
     "Social Mining Drafts": "AIRTABLE_SOCIAL_MINING_DRAFTS_TABLE",
     "Social Mining Log": "AIRTABLE_SOCIAL_MINING_LOG_TABLE",
+    "GSC Opportunities": "AIRTABLE_GSC_OPPORTUNITIES_TABLE",
+    "GA4 Insights": "AIRTABLE_GA4_INSIGHTS_TABLE",
 }
 
 def main():
