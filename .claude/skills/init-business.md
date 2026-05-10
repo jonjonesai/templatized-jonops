@@ -7,7 +7,7 @@ airtable_reads: []
 airtable_writes: []
 external_apis: []
 active: true
-notes: "Onboarding wizard. Run once to configure JonOps for a new business. Generates CLAUDE.md, email-persona.md, and MEMORY.md from templates."
+notes: "Onboarding wizard. Run once to configure JonOps for a new business. Generates CLAUDE.md, email-persona.md, brand-voice.md, knowledge-base.md, and MEMORY.md from templates."
 ---
 
 # Init Business Skill — Onboarding Wizard
@@ -475,11 +475,39 @@ Read `templates/email-persona.template.md` and populate:
 
 Write to `email-persona.md` in the project root.
 
-### 3. MEMORY.md
+### 3. brand-voice.md
+
+Read `templates/brand-voice.template.md` and populate the brand-voice placeholders (see template's PLACEHOLDER REFERENCE table). Use the user's earlier wizard answers for what's pre-known (`{{BRAND_NAME}}`, `{{EMAIL_PERSONA_NAME}}`, `{{ENGLISH_VARIANT}}`, etc.); ask any missing voice/tone/banned-phrase questions in a single follow-up batch before writing the file.
+
+Key voice questions to ask if not already collected:
+- "What is your brand NOT? (One sentence anchoring against your category — e.g. 'A wellness brand riding the trend' or 'A POD merch farm.')"
+- "What's the one wedge that makes your voice different from competitors? (e.g. 'cultural specificity', 'honesty', 'sensory writing')"
+- "List 4-6 phrases your brand would never say. (e.g. 'Dear Valued Customer', 'World-class', 'Per our policy')"
+- "List 4-6 phrases your brand would naturally say."
+- "Any trademark, regulatory, or legal claim discipline rules? (e.g. 'never say cures', 'always use ® on first mention')"
+- "Exclamation marks: rare / sparingly / freely?"
+- "Em dashes: fine / banned (per brand book)?"
+- "Emoji rules: none / light social only / freely?"
+
+Write to `brand-voice.md` in the project root.
+
+### 4. knowledge-base.md
+
+Read `templates/knowledge-base.template.md` and populate the knowledge-base placeholders. Most placeholders auto-fill from the user's earlier wizard answers (URL, product categories, Airtable tables); only ask follow-ups for what isn't yet known.
+
+Key KB questions to ask if not already collected:
+- "Where does your shipping policy live? (URL or 'FAQ → shipping section')"
+- "What's your About / FAQ / Returns / Privacy URLs?"
+- "Any brand-specific facts the agent should know? (Things not on the live site — founding year, sourcing partners, what makes you the original, etc.) — list 3-8 short bullets."
+- "Any claim boundaries to enforce? (e.g. 'never claim oils cure', 'never quote price in email', 'no organic claim unless certified')"
+
+Write to `knowledge-base.md` in the project root.
+
+### 5. MEMORY.md
 
 Copy `templates/MEMORY.template.md` to `MEMORY.md` — no replacements needed.
 
-### 4. .env.example Enhancement
+### 6. .env.example Enhancement
 
 Generate a customized `.env.example` with only the env vars needed for their enabled integrations:
 
@@ -549,7 +577,9 @@ TZ_OFFSET_HOURS=[CALCULATED_FROM_TIMEZONE]
 I've generated the following files:
 
   📄 CLAUDE.md — Your agent's identity and configuration
-  📄 email-persona.md — Email reply persona
+  📄 email-persona.md — Email reply persona (the voice that signs your replies)
+  📄 brand-voice.md — Brand-level voice rules (banned phrases, claim discipline, signature vocabulary)
+  📄 knowledge-base.md — Pointer index telling the agent where canonical facts live
   📄 MEMORY.md — Agent's learning memory (starts empty)
   📄 .env.example — Environment variables template
 
@@ -599,7 +629,7 @@ Need help? Check SETUP.md for detailed instructions, or ask me any questions!
 ## SKILL_RESULT
 
 ```
-SKILL_RESULT: success | JonOps initialized for [BUSINESS_NAME] | Files generated: CLAUDE.md, email-persona.md, MEMORY.md, .env.example
+SKILL_RESULT: success | JonOps initialized for [BUSINESS_NAME] | Files generated: CLAUDE.md, email-persona.md, brand-voice.md, knowledge-base.md, MEMORY.md, .env.example
 ```
 
 On cancel: `SKILL_RESULT: skip | User cancelled initialization wizard`
