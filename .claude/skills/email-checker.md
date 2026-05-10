@@ -15,6 +15,8 @@ notes: "Twice-daily email check. Categorizes, labels, drafts replies as email pe
 ## What This Skill Does (Plain English)
 Twice a day, this skill checks your business Gmail inbox for unread emails, categorizes each one (customer question, partnership inquiry, finance, or misc), applies color-coded Gmail labels, and drafts replies as your email persona for customer and partnership emails. Finance emails are never replied to — instead, they get escalated to the operator as an Asana task.
 
+**Emails are left UNREAD on purpose.** Jon scans the inbox by bold state — the agent's role is to pre-categorize + draft, not to clear unread. He marks read after he reviews/sends the draft.
+
 **Examples by business type:**
 - **Bakery:** Reader asking "How do I fix a flat sourdough?" gets a warm, helpful draft reply
 - **Landscaper:** "When should I plant tulip bulbs?" gets an expert response
@@ -22,7 +24,32 @@ Twice a day, this skill checks your business Gmail inbox for unread emails, cate
 
 ---
 
-You are the **email persona** defined in CLAUDE.md. Before drafting any reply, read the persona file (path defined in CLAUDE.md as `EMAIL_PERSONA_FILE`) to internalize the tone, style, and boundaries.
+You are the **email persona** for this business. Before drafting anything, run **Step 0** (below) to load the project's voice and knowledge — *then* you can categorize and draft.
+
+---
+
+## Step 0: Load Project Knowledge (Before Anything Else)
+
+Filename conventions differ by business — discover what's there, read what you find, don't fail on what's missing.
+
+Run `ls /home/agent/project/` once and look for these three surfaces:
+
+**1. Email persona** — the voice you write AS. Look for:
+- `email-persona.md` (canonical)
+- `*-persona.md` (e.g. `rebecca-moore-persona.md`)
+- Path in CLAUDE.md `EMAIL_PERSONA_FILE` if defined
+
+**2. Brand voice** — brand-level tone, vocabulary, claims-discipline. Look for:
+- `BRAND_VOICE.md` / `brand-voice.md`
+- `brand/` directory — read `brand-book.txt` / `brand-book.md` if present
+
+**3. Knowledge base** — facts to draft accurately (product specs, FAQ, what you can/can't claim). Look for:
+- `knowledge-base.md` / `KNOWLEDGE.md`
+- `knowledge_base/` directory — read the index or top-level files
+
+**Read everything you find, in full.** Persona = your voice. Brand voice = style guardrails. Knowledge base = facts.
+
+If a surface is missing, proceed without it and note the gap in your final `SKILL_RESULT` line (e.g. `success | drafted without brand-voice.md — recommend backfill`). Never block on missing files.
 
 ---
 
@@ -35,6 +62,8 @@ You are the **email persona** defined in CLAUDE.md. Before drafting any reply, r
 ---
 
 ## Step 1: Authenticate with Gmail API
+*(Step 0 above must run first.)*
+
 
 Get a fresh access token using the OAuth refresh token:
 
@@ -157,7 +186,7 @@ curl -s -X POST "https://gmail.googleapis.com/gmail/v1/users/me/messages/{MESSAG
 
 ## Step 5: Draft Replies (Categories 1 & 2 Only)
 
-**IMPORTANT:** Read the email persona file (path from CLAUDE.md) before drafting. You ARE the email persona.
+**IMPORTANT:** Step 0 must already be done — you've read the persona, brand voice, and knowledge base. Draft AS the persona, with the brand voice's guardrails, using the knowledge base for facts.
 
 ### For Category 1 (Customer) and Category 2 (Partnership):
 
@@ -219,7 +248,7 @@ curl -s -X POST "https://app.asana.com/api/1.0/tasks" \
 
 ### For Category 4 (Misc):
 - If it's a genuine question from a reader in your domain: draft a helpful reply as the email persona
-- If it's spam or automated junk: mark as read, skip
+- If it's spam or automated junk: label `Agent/Misc` and skip (do NOT mark as read — Jon triages)
 - If it's ambiguous or potentially important: create an Asana task for operator:
 
 ```bash
@@ -238,16 +267,16 @@ curl -s -X POST "https://app.asana.com/api/1.0/tasks" \
 
 ---
 
-## Step 6: Mark Processed Emails as Read
+## Step 6: Leave Emails UNREAD
 
-After categorizing, labeling, and drafting (if applicable), mark each email as read:
+**DO NOT mark processed emails as read.** Jon triages the inbox visually — the unread/bold state is his signal that an email still needs his eyes. Your job is to categorize, label, and draft — never to clear the unread flag.
 
-```bash
-curl -s -X POST "https://gmail.googleapis.com/gmail/v1/users/me/messages/{MESSAGE_ID}/modify" \
-  -H "Authorization: Bearer $ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"removeLabelIds": ["UNREAD"]}'
-```
+After processing each email it should have:
+- An `Agent/*` label applied (Step 4)
+- A draft reply in the Gmail thread (Step 5, Categories 1 / 2 / qualifying Cat 4)
+- Still showing as **unread** in the inbox
+
+Do NOT call any `messages/{id}/modify` endpoint with `removeLabelIds: ["UNREAD"]`. The only modify calls in this skill are `addLabelIds` for the Agent labels.
 
 ---
 
@@ -279,7 +308,7 @@ Also update MEMORY.md if any email reveals something the agent should remember l
 - [ ] Draft replies created for Category 1 and Category 2 emails
 - [ ] Category 3 emails escalated to Asana (no draft reply)
 - [ ] Category 4 handled appropriately (reply, skip, or Asana)
-- [ ] All processed emails marked as read
+- [ ] All processed emails STILL UNREAD (Agent label applied, draft created — but UNREAD flag preserved so Jon sees them)
 - [ ] Summary logged to observations.md
 
 ---
