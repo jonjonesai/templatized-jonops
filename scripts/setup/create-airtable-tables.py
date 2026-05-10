@@ -501,12 +501,18 @@ TABLES = [
             {"name": "Status", "type": "singleSelect", "options": {"choices": [
                 {"name": "Pending Review", "color": "yellowLight2"},
                 {"name": "Auto-Applied", "color": "greenLight2"},
+                {"name": "Queued for Refresh", "color": "purpleLight2"},
+                {"name": "Refreshed", "color": "greenLight2"},
+                {"name": "Refresh-Failed", "color": "redLight2"},
                 {"name": "Skipped", "color": "grayLight2"},
                 {"name": "Apply-Failed", "color": "redLight2"},
                 {"name": "Rolled-Back", "color": "orangeLight2"},
             ]}},
             {"name": "Notes", "type": "multilineText"},
             {"name": "Snapshot Path", "type": "singleLineText"},
+            {"name": "Post ID", "type": "number", "options": {"precision": 0}},
+            {"name": "Refresh Brief", "type": "multilineText"},
+            {"name": "Refresh Date", "type": "date", "options": {"dateFormat": {"name": "iso"}}},
         ]
     },
     {

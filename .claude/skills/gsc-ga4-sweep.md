@@ -333,15 +333,47 @@ curl -s -X POST -H "Authorization: Bearer $ACCESS_TOKEN" -H "Content-Type: appli
 
 **10d. Write `GA4 Insights` rows** (batched, max 20). Idempotent: same `Brand + Source/Medium + Date` PATCH-replaces.
 
-### Step 11: Telegram + SKILL_RESULT
+### Step 10.5: Queue Content-Refresh candidates for autonomous handoff to blog-writer
+
+For every Content-Refresh candidate identified in Step 6 (page-2 hostage with > 100 impressions / < 5 clicks, OR average position drop > 3 ranks vs prior 30d):
+
+1. Build the refresh brief — populate the `Refresh Brief` field on the Airtable row with:
+   - Target query
+   - Page URL + post ID + slug
+   - Current position + impressions + clicks (last 30d)
+   - Prior 30d position (if rank-drop)
+   - Top 5 SERP competitors for the target query (pull via DataForSEO `serp` if available; otherwise leave blank)
+   - Suggested angle: "rank-drop recovery" | "page-2 → page-1" | "expand for related queries"
+2. Set `Status=Queued for Refresh`. Do NOT auto-rewrite content from this skill — that's blog-writer's job.
+3. blog-writer's Step 0 (added in this same branch) checks this table at the start of every daily run and processes up to **1 refresh per day per brand** before pulling from the Content Calendar.
+
+**Rationale:** Content rewrites are higher-blast-radius than meta rewrites. The blog-writer skill already owns post-creation discipline (voice, length, structure, link integrity, snapshotting). Routing refreshes through it preserves that discipline and avoids two skills competing for the same WP post. Quota of 1/day prevents content cadence from being dominated by refreshes.
+
+**No Asana cards. No human-in-the-loop step.** The agent sees the page-2 hostage, queues it, blog-writer rewrites it on the next 00:00 cron tick. If blog-writer's rewrite fails verification, it rolls back and pings Telegram (the same critical-anomaly channel — see Step 11).
+
+### Step 11: Telegram (critical/strategic channel only) + SKILL_RESULT
+
+Telegram is **NOT** a routine sweep digest. It's reserved for items that require Jon's deeper thinking or operator action. Fire on these conditions and ONLY these:
+
+| Condition | Telegram message |
+|-----------|------------------|
+| One or more Brand-Defense gaps surfaced (impressions ≥ 5, position > 3) | `🔍 [BRAND] brand-defense gap: "[query]" pos [P] imp [I] — strategic decision needed (schema/page/competitor)` |
+| Auto-apply failed and rolled back | `❌ [BRAND] gsc-ga4-sweep auto-apply rolled back on [page]: [reason]` |
+| Skill skipped due to missing creds, missing GSC property, or env mismatch | `⚠️ [BRAND] gsc-ga4-sweep skipped: [reason] — env or OAuth fix needed` |
+| Critical exception (>500 lines stack trace, repeated 5xx, etc.) | `🚨 [BRAND] gsc-ga4-sweep crashed: [first-line]` |
+
+Do NOT fire Telegram on:
+- Routine successful sweeps with auto-applied CTR-rewrites and queued Content-Refresh items.
+- Empty result sets (no opportunities surfaced — that's a healthy site).
+- Pending-Review CTR-Rewrite candidates (those live in Airtable for the operator to scan at their own cadence).
 
 ```bash
-bash /home/agent/project/telegram-alert.sh "✅ gsc-ga4-sweep — [N CTR, M Refresh, K Brand-Defense] opportunities, [P GA4 rows], [A auto-applied]"
+# example invocation, only if a triggering condition above is met
+bash /home/agent/project/telegram-alert.sh "<one-line message per the table above>"
 ```
-On failure: `❌ gsc-ga4-sweep — [error]`. On skip: `⚠️ gsc-ga4-sweep — [reason]`.
 
 ```
-SKILL_RESULT: success | [N] CTR-Rewrite, [M] Content-Refresh, [K] Brand-Defense, [P] GA4 rows, [A] auto-applied | top: [target_query_1], [target_query_2]
+SKILL_RESULT: success | [N] CTR-Rewrite, [M] Content-Refresh queued, [K] Brand-Defense, [P] GA4 rows, [A] auto-applied | top: [target_query_1], [target_query_2]
 ```
 
 ### Step 12: Airtable schema bootstrap
