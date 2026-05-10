@@ -127,6 +127,14 @@
         "timeout": 5400,
         "active": true
       },
+      "monday_04:00": {
+        "task": "gsc-ga4-sweep",
+        "skill": "gsc-ga4-sweep.md",
+        "prompt": "gsc-ga4-sweep.md",
+        "description": "Weekly GSC + GA4 sweep — meta-title quick wins, content-refresh candidates, brand-defense gaps, traffic-source patterns. May auto-apply Rank Math meta rewrites at confidence >= 0.85.",
+        "timeout": 5400,
+        "active": false
+      },
       "monday_10:30": {
         "task": "link-outreach-query-researcher",
         "skill": "link-outreach-query-researcher.md",

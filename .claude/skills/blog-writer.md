@@ -35,8 +35,125 @@ This skill writes and publishes a full SEO-optimized blog post from start to fin
 
 ---
 
+## 0. Step 0: Refresh-Queue Pre-Check (gsc-ga4-sweep handoff)
+
+**Why this step exists:** The `gsc-ga4-sweep` skill (weekly Monday 04:00) identifies pages that are losing rank or hostage on page 2. Rather than flagging them for human review, it queues them in `GSC Opportunities` (Airtable) with `Type=Content-Refresh` + `Status=Queued for Refresh` + a populated `Refresh Brief`. Blog-writer picks the highest-impressions queued refresh BEFORE pulling from the Content Calendar — autonomous loop, no human bottleneck. Quota: **1 refresh per day per brand** (don't dominate normal cadence).
+
+**Run this BEFORE Step 1 (Keyword Selection). If a refresh is processed, skip Steps 1-9 and go straight to Step 10 (post-publish updates).**
+
+### 0.1 Query Airtable for queued refreshes
+
+```bash
+RECORDS=$(curl -s -G "https://api.airtable.com/v0/$AIRTABLE_BASE_ID/$AIRTABLE_GSC_OPPORTUNITIES_TABLE" \
+  -H "Authorization: Bearer $AIRTABLE_API_KEY" \
+  --data-urlencode "filterByFormula=AND({Brand}='$BRAND_NAME',{Status}='Queued for Refresh',{Type}='Content-Refresh')" \
+  --data-urlencode "sort[0][field]=Impressions" \
+  --data-urlencode "sort[0][direction]=desc" \
+  --data-urlencode "maxRecords=1")
+
+REFRESH_RECORD_ID=$(echo "$RECORDS" | python3 -c "import sys,json;d=json.load(sys.stdin);print(d['records'][0]['id'] if d.get('records') else '')")
+```
+
+If empty → continue to Step 1 normally. No refresh today.
+
+### 0.2 Snapshot the existing post (mandatory pre-write safety)
+
+```bash
+SNAPDIR="/home/agent/project/.claude/data/blog-writer/refresh-snapshots"
+mkdir -p "$SNAPDIR"
+SNAP="$SNAPDIR/$(date -u +%Y%m%dT%H%M%SZ)-${BRAND_SLUG}-${POST_ID}.md"
+
+# Pull post content + Rank Math meta + featured image ID + categories
+curl -s -u "$WP_USERNAME:$WP_PASSWORD" "$WP_URL/wp-json/wp/v2/posts/$POST_ID?context=edit" > "$SNAP.json"
+
+# Pull Rank Math meta
+curl -s -u "$WP_USERNAME:$WP_PASSWORD" "$WP_URL/wp-json/rankmath/v1/getMetadata?objectID=$POST_ID&objectType=post" > "$SNAP.rankmath.json" 2>/dev/null
+
+echo "# Refresh snapshot — $BRAND_NAME post $POST_ID" > "$SNAP"
+echo "date: $(date -Iseconds)" >> "$SNAP"
+echo "trigger: gsc-ga4-sweep refresh queue (record $REFRESH_RECORD_ID)" >> "$SNAP"
+```
+
+### 0.3 Read the Refresh Brief
+
+```bash
+BRIEF=$(echo "$RECORDS" | python3 -c "import sys,json;print(json.load(sys.stdin)['records'][0]['fields'].get('Refresh Brief',''))")
+TARGET_QUERY=$(echo "$RECORDS" | python3 -c "import sys,json;print(json.load(sys.stdin)['records'][0]['fields'].get('Target Query',''))")
+PAGE_URL=$(echo "$RECORDS" | python3 -c "import sys,json;print(json.load(sys.stdin)['records'][0]['fields'].get('Page URL',''))")
+POST_ID=$(echo "$RECORDS" | python3 -c "import sys,json;print(json.load(sys.stdin)['records'][0]['fields'].get('Post ID',''))")
+```
+
+### 0.4 Refresh strategy (chosen by Refresh Brief's "Suggested angle")
+
+| Suggested angle | Action |
+|-----------------|--------|
+| `rank-drop recovery` | Read existing post, identify what's stale, rewrite with new SERP-current data + 2026 references. Preserve URL, slug, ID, featured image, categories, tags. Update body content to match what's currently winning the SERP. |
+| `page-2 → page-1` | Existing post ranks 11-20 with high impressions. Rewrite emphasizing the target query in H1 + intro + sub-headings. Add internal links from related top-ranking posts. Expand thin sections. |
+| `expand for related queries` | Existing post owns one query but adjacent ones (top 5 SERP overlap) are uncovered. Add 2-3 new H2 sections covering the related angle. |
+
+In ALL cases:
+- Re-run SERP research (Step 2) for the target query.
+- Re-write content using the SAME content rules as Steps 4-7 (voice, length, image generation, CTAs, newsletter form).
+- PRESERVE: URL, slug, post ID, publication date, original featured image (unless brief says to regenerate), categories, tags, comment thread.
+- UPDATE: title, content, Rank Math meta, modified date.
+
+### 0.5 PATCH the post via WP REST
+
+```bash
+PAYLOAD=$(jq -n --arg t "$NEW_TITLE" --arg c "$NEW_CONTENT" '{title: $t, content: $c}')
+curl -s -X POST -u "$WP_USERNAME:$WP_PASSWORD" -H "Content-Type: application/json" \
+  "$WP_URL/wp-json/wp/v2/posts/$POST_ID" -d "$PAYLOAD"
+
+# Update Rank Math meta separately
+curl -s -X POST -u "$WP_USERNAME:$WP_PASSWORD" -H "Content-Type: application/json" \
+  "$WP_URL/wp-json/rankmath/v1/updateMeta" \
+  -d "{\"objectID\":$POST_ID,\"objectType\":\"post\",\"meta\":{\"rank_math_title\":\"$NEW_META_TITLE\",\"rank_math_description\":\"$NEW_META_DESC\",\"rank_math_focus_keyword\":\"$TARGET_QUERY\"}}"
+```
+
+### 0.6 Verify on live HTML
+
+```bash
+sleep 30
+LIVE=$(curl -sL "$PAGE_URL")
+if echo "$LIVE" | grep -qF "$NEW_H1"; then
+  REFRESH_STATUS="Refreshed"
+else
+  REFRESH_STATUS="Refresh-Failed"
+  # Roll back: PATCH post with snapshotted content + meta
+  ORIG_TITLE=$(jq -r '.title.raw' "$SNAP.json")
+  ORIG_CONTENT=$(jq -r '.content.raw' "$SNAP.json")
+  curl -s -X POST -u "$WP_USERNAME:$WP_PASSWORD" -H "Content-Type: application/json" \
+    "$WP_URL/wp-json/wp/v2/posts/$POST_ID" -d "$(jq -n --arg t "$ORIG_TITLE" --arg c "$ORIG_CONTENT" '{title: $t, content: $c}')"
+  bash /home/agent/project/telegram-alert.sh "❌ [$BRAND_NAME] blog-writer refresh rolled back on $PAGE_URL — verification failed"
+fi
+```
+
+### 0.7 Update the Airtable record
+
+```bash
+curl -s -X PATCH "https://api.airtable.com/v0/$AIRTABLE_BASE_ID/$AIRTABLE_GSC_OPPORTUNITIES_TABLE/$REFRESH_RECORD_ID" \
+  -H "Authorization: Bearer $AIRTABLE_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d "{\"fields\":{\"Status\":\"$REFRESH_STATUS\",\"Snapshot Path\":\"$SNAP\",\"Refresh Date\":\"$(date -u +%Y-%m-%d)\"}}"
+```
+
+### 0.8 Exit (skip Steps 1-9)
+
+If a refresh ran (success or rolled back), this skill is done for the day. Emit:
+
+```
+SKILL_RESULT: success | refresh | $TARGET_QUERY | post $POST_ID | $REFRESH_STATUS
+```
+
+Do NOT pick a Content Calendar item this run — the brand gets one autonomous SEO action per day, refresh OR new post.
+
+If verification rolled back, the brand still consumed its one daily slot. Telegram fired. Operator will review the snapshot and the rollback.
+
+---
+
 ## TABLE OF CONTENTS
 
+0. [Step 0: Refresh-Queue Pre-Check (gsc-ga4-sweep handoff)](#0-step-0-refresh-queue-pre-check-gsc-ga4-sweep-handoff)
 1. [Overview & Goals](#1-overview--goals)
 2. [Prerequisites & Environment](#2-prerequisites--environment)
 3. [Step 1: Keyword Selection](#3-step-1-keyword-selection)
