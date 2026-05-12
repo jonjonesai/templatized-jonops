@@ -103,6 +103,7 @@ curl -s -X POST "https://app.metricool.com/api/v2/scheduler/posts?blogId=${BLOG_
     \"draft\": false,
     \"autoPublish\": true,
     \"media\": [\"${MEDIA_URL}\"],
+    \"videoCoverMilliseconds\": 3000,
     \"instagramData\": ${INSTAGRAM_DATA}
   }"
 ```
