@@ -144,7 +144,9 @@ curl -s -X POST "https://app.metricool.com/api/v2/scheduler/posts?userToken=${ME
     \"publicationDate\": {\"dateTime\": \"${SCHEDULE_TIME}\", \"timezone\": \"${SCHEDULE_TIMEZONE}\"},
     \"draft\": false,
     \"autoPublish\": true,
-    \"media\": [\"${MEDIA_URL}\"]
+    \"media\": [\"${MEDIA_URL}\"],
+    \"videoCoverMilliseconds\": 3000,
+    \"tiktokData\": {\"privacyOption\": \"PUBLIC_TO_EVERYONE\", \"disableComment\": false, \"disableDuet\": false, \"disableStitch\": false, \"commercialContentOwnBrand\": false, \"commercialContentThirdParty\": false, \"isAigc\": false}
   }"
 ```
 
