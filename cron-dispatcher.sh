@@ -158,77 +158,11 @@ CLAUDECODE_WAS="${CLAUDECODE:-UNSET}"
 # inside an interactive Claude session (inherits CLAUDECODE env var)
 unset CLAUDECODE
 
-# ---------------------------------------------------------------
-# Use real HOME so claude can use .credentials.json refresh token.
-# The refresh token (sk-ant-ort01-*) auto-renews the access token.
-# CLAUDE_CODE_OAUTH_TOKEN in .env is a short-lived access token
-# only — no refresh mechanism. Letting claude use ~/.claude/
-# .credentials.json is the correct approach for long-running cron.
-# ---------------------------------------------------------------
-# (Clean HOME approach removed 2026-03-14 — was preventing token refresh)
-
-# ---------------------------------------------------------------
-# Pre-flight auth check — fail fast instead of hanging for 60min
-# Check OAuth token expiry from credentials file. If token is
-# expired OR will expire within 2 hours, proactively refresh it.
-# If no ANTHROPIC_API_KEY fallback, abort early with Telegram alert.
-#
-# Why 2-hour buffer: Access tokens last ~24h. Some tasks run up to
-# 90 minutes. Refreshing early prevents mid-task expiry and avoids
-# the window where a token expires between scheduled tasks.
-# ---------------------------------------------------------------
-CREDS_FILE="$HOME/.claude/.credentials.json"
-AUTH_OK=true
-BUFFER_MS=7200000  # 2 hours in milliseconds
-
-if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
-    # API key set — no expiry concern
-    :
-elif [ -f "$CREDS_FILE" ]; then
-    EXPIRES_AT=$(python3 -c "
-import json, sys, time
-try:
-    d = json.load(open('$CREDS_FILE'))
-    exp = d.get('claudeAiOauth', {}).get('expiresAt', 0)
-    print(int(exp))
-except: print(0)
-" 2>/dev/null)
-    NOW_MS=$(python3 -c "import time; print(int(time.time() * 1000))")
-    THRESHOLD=$((NOW_MS + BUFFER_MS))
-    if [ "$EXPIRES_AT" -gt 0 ] && [ "$THRESHOLD" -gt "$EXPIRES_AT" ]; then
-        # Token expired or expiring within 2h — proactively refresh
-        # (a real API call via `claude --print -p ping` triggers the refresh flow;
-        #  `claude --version` does NOT — it's metadata-only and never hits the API)
-        if claude --print -p ping < /dev/null > /dev/null 2>&1; then
-            # Re-read expiry after refresh attempt
-            EXPIRES_AT=$(python3 -c "
-import json
-d = json.load(open('$CREDS_FILE'))
-print(int(d.get('claudeAiOauth', {}).get('expiresAt', 0)))
-" 2>/dev/null)
-            if [ "$NOW_MS" -gt "$EXPIRES_AT" ]; then
-                AUTH_OK=false
-            fi
-        else
-            AUTH_OK=false
-        fi
-    fi
-else
-    AUTH_OK=false
-fi
-
-if [ "$AUTH_OK" = "false" ]; then
-    {
-        echo "========================================================"
-        echo "DISPATCH: $TASK_NAME | $WITA_DATE $WITA_TIME WITA"
-        echo "AUTH CHECK FAILED — Claude OAuth token expired and refresh failed."
-        echo "Re-authenticate: claude login"
-        echo "========================================================"
-    } > "$LOG_FILE"
-    echo "[$TIMESTAMP] ABORTED: Claude auth check failed. See $LOG_FILE"
-    bash /home/agent/project/telegram-alert.sh "AUTH FAILURE — $TASK_NAME skipped. OAuth token expired. Run: claude login" 2>/dev/null || true
-    exit 1
-fi
+# Use real HOME so claude can use ~/.claude/.credentials.json. The CLI
+# auto-refreshes the access token on every invocation when the refresh
+# token is valid — no preflight check needed. If auth is genuinely
+# broken, claude --print exits non-zero and we classify the failure
+# after the call (see post-run auth-failure detector below).
 
 # Write diagnostic header directly to the task log file
 {
@@ -256,6 +190,14 @@ set -e
     echo "EXIT CODE: $EXIT_CODE | $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
     echo "========================================================"
 } >> "$LOG_FILE"
+
+# Reactive auth-failure classifier — if the slot failed AND the log
+# contains auth-shaped errors, fire a distinct Telegram alert. This
+# replaces the old preflight shim with after-the-fact detection that
+# can't race the CLI's own refresh flow.
+if [ "$EXIT_CODE" -ne 0 ] && grep -qiE "unauthorized|please run.*login|oauth.*expir|invalid_grant|401 unauthorized|authentication.*failed" "$LOG_FILE" 2>/dev/null; then
+    bash /home/agent/project/telegram-alert.sh "⚠️ AUTH FAILURE — ${PROJECT_NAME:-unknown}/$TASK_NAME exited $EXIT_CODE with auth error. Run: claude login on container jonops-${PROJECT_NAME:-unknown}" 2>/dev/null || true
+fi
 
 echo "[$TIMESTAMP] Claude exited with code: $EXIT_CODE"
 echo "[$TIMESTAMP] Task complete: $TASK_NAME"
