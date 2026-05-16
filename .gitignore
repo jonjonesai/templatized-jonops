@@ -74,3 +74,12 @@ schedule-overview.pdf
 # !templates/
 # !.env.example
 # !SETUP.md
+
+# Almanac per-fire artifacts (generated, not source)
+almanac/*/renders/
+almanac/*/assets/
+almanac/*/index.html
+almanac/*/build_config.json
+almanac/*/plan.json
+almanac/*/words.json
+almanac/*/beats.json
