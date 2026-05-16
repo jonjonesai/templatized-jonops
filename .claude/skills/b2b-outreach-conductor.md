@@ -1,6 +1,6 @@
 ---
 skill: b2b-outreach-conductor
-version: 1.0.0
+version: 1.1.0
 cadence: weekly (Wednesday 10:00)
 trigger: cron
 airtable_reads: [B2B Leads]
@@ -41,10 +41,10 @@ Find campaign matching name from CLAUDE.md. Extract campaign ID.
 
 ### Step 3: Pull verified B2B leads not yet contacted
 ```bash
-curl -s --retry 3 --retry-delay 2 "https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_B2B_LEADS_TABLE}?filterByFormula=AND(Status='Verified',{Outreach Status}='Not Started')&maxRecords=20" \
+curl -s --retry 3 --retry-delay 2 "https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_B2B_LEADS_TABLE}?filterByFormula=AND(Status='Verified',{Outreach Status}='Not Started')&maxRecords=50" \
   -H "Authorization: Bearer ${AIRTABLE_API_KEY}"
 ```
-Limit 20 leads per run — don't flood the campaign.
+Limit 50 leads per run — Instantly's campaign-level `daily_max_leads` (e.g. 10/day) handles the actual drip, so the conductor should hand the campaign roughly one week of verified leads per fire (10/day × 5 weekdays = 50). Drop this cap only if you've also throttled the campaign-side daily lead release.
 
 If no verified leads → SKILL_RESULT: skip | No verified B2B leads ready. b2b-outreach-lead-finder needs to run.
 
