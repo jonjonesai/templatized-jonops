@@ -151,6 +151,14 @@
         "timeout": 3600,
         "active": false
       },
+      "monday_16:00": {
+        "task": "b2b-outreach-lead-finder",
+        "skill": "b2b-outreach-lead-finder.md",
+        "prompt": "b2b-outreach-lead-finder.md",
+        "description": "Find B2B bulk buyer leads via Google Maps or LinkedIn per CLAUDE.md target profile (drain fresh queue 2h after Mon query-researcher)",
+        "timeout": 3600,
+        "active": false
+      },
       "tuesday_10:00": {
         "task": "b2b-outreach-lead-finder",
         "skill": "b2b-outreach-lead-finder.md",
