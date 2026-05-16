@@ -8,10 +8,10 @@ Standalone repo: https://github.com/jonjonesai/almanac
 
 ## Container layout
 
-Each JonOps container is one brand. The Almanac engine + that brand's config live under `/opt/jonops/almanac/`:
+Each JonOps container is one brand. The Almanac engine + that brand's config live under `/home/agent/project/almanac/` (mounted from the host at `/opt/jonops/projects/<brand>/project/almanac/`):
 
 ```
-/opt/jonops/almanac/
+/home/agent/project/almanac/
 ├── almanac_pipeline.py      # orchestrator (shared engine, brand-agnostic)
 ├── docs/                    # philosophy, verified_facts pattern, brand onboarding
 ├── templates/               # brand.json, DESIGN.md, dispatcher.yml templates
@@ -34,7 +34,7 @@ Each JonOps container is one brand. The Almanac engine + that brand's config liv
 The `social-tiktok.md` skill, when called in VIDEO mode by `social-poster-2.md`, routes through Almanac:
 
 ```bash
-python3 /opt/jonops/almanac/almanac_pipeline.py \
+python3 /home/agent/project/almanac/almanac_pipeline.py \
   --brand <brand-slug>
 ```
 

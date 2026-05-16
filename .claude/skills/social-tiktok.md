@@ -86,7 +86,7 @@ The `--skip-metricool` flag tells Almanac NOT to schedule its own Metricool post
 # Invoke Almanac with the orchestrator-provided topic + brief
 ALMANAC_RESULT="/tmp/almanac-${FILENAME_SLUG}.json"
 
-python3 /opt/jonops/almanac/almanac_pipeline.py \
+python3 /home/agent/project/almanac/almanac_pipeline.py \
   --brand "${BRAND_SLUG}" \
   --topic-override "${TITLE}" \
   --angle-override "${CONTENT_SOURCE}" \
