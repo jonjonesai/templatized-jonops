@@ -106,9 +106,18 @@ def get_all_daily_slots():
 
 
 def get_task_for_slot(slot, day_name):
-    """Return the task dict for a given slot + day, considering weekly/monthly overrides."""
+    """Return the task dict for a given slot + day, considering weekly/monthly overrides.
+
+    Logs the full resolution path so slot mismatches (e.g. friday_08:00 silently
+    resolving to thursday_08:00) are diagnosable from scheduler.log.
+    """
     schedule = load_schedule()
     now = datetime.now(WITA)
+    weekly = schedule.get("recurring", {}).get("weekly", {})
+    daily = schedule.get("recurring", {}).get("daily", {})
+
+    # Surface any other weekday entries that share this slot — collision evidence
+    colliding_weekly_keys = [k for k in weekly.keys() if k.endswith(f"_{slot}")]
 
     # Monthly first (only on 1st of month)
     if now.day == 1:
@@ -119,11 +128,11 @@ def get_task_for_slot(slot, day_name):
             if task.get("active", True):
                 task["slot"] = slot
                 task["schedule_type"] = "monthly"
+                log(f"RESOLVE slot {slot} day {day_name} → monthly[{monthly_key}] = {task.get('task')}")
                 return task
             # active: false → fall through to weekly/daily
 
     # Weekly override
-    weekly = schedule.get("recurring", {}).get("weekly", {})
     weekly_key = f"{day_name}_{slot}"
     if weekly_key in weekly:
         task = weekly[weekly_key].copy()
@@ -131,19 +140,34 @@ def get_task_for_slot(slot, day_name):
             task["slot"] = slot
             task["schedule_type"] = "weekly"
             task["day"] = day_name
+            collisions_note = ""
+            if len(colliding_weekly_keys) > 1:
+                others = sorted(k for k in colliding_weekly_keys if k != weekly_key)
+                collisions_note = f" (other weekdays at this slot: {', '.join(others)} — collision is fine if today's day_name resolves correctly)"
+            log(f"RESOLVE slot {slot} day {day_name} → weekly[{weekly_key}] = {task.get('task')}{collisions_note}")
             return task
         # active: false → fall through to daily
+        log(f"RESOLVE slot {slot} day {day_name} → weekly[{weekly_key}] inactive, falling through to daily")
 
     # Daily fallback
-    daily = schedule.get("recurring", {}).get("daily", {})
     if slot in daily:
         task = daily[slot].copy()
         if not task.get("active", True):
+            log(f"RESOLVE slot {slot} day {day_name} → daily[{slot}] inactive, no task to fire")
             return None
         task["slot"] = slot
         task["schedule_type"] = "daily"
+        log(f"RESOLVE slot {slot} day {day_name} → daily[{slot}] = {task.get('task')}")
         return task
 
+    # No match at any layer — flag if there were other weekday entries for this slot
+    # (most common cause: forgot to add today's weekday key while collision keys exist)
+    if colliding_weekly_keys:
+        log(
+            f"RESOLVE slot {slot} day {day_name} → NO MATCH but other weekdays have this slot: "
+            f"{', '.join(sorted(colliding_weekly_keys))}. Likely missing {day_name}_{slot} entry.",
+            "WARN",
+        )
     return None
 
 
