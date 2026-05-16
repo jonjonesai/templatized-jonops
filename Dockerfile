@@ -7,6 +7,10 @@
 FROM python:3.11-slim
 
 # Install system dependencies
+# chromium + ffmpeg added 2026-05-16 for Almanac video render — HyperFrames
+# uses Puppeteer (Chrome DevTools Protocol) for headless composition render,
+# then ffmpeg for normalization + audio mux. Both are required for the
+# Almanac pipeline (almanac/almanac_pipeline.py) to render mp4s in-container.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     git \
@@ -14,7 +18,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nodejs \
     npm \
     supervisor \
+    chromium \
+    fonts-liberation \
+    fonts-noto-color-emoji \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
+
+# Tell Puppeteer (HyperFrames internal dep) to use the system Chromium
+# instead of downloading its own ~150MB copy at install time.
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
 # Install Claude Code CLI
 RUN npm install -g @anthropic-ai/claude-code
