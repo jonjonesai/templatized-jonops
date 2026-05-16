@@ -26,6 +26,17 @@ Take the queued newsletter brief from the Newsletter Queue, write a complete ema
 - AIRTABLE_API_KEY, AIRTABLE_BASE_ID in .env
 - REPLICATE_API, TINIFY_API in .env
 
+## Padding layers (read FIRST, before drafting any HTML)
+
+This skill is **generic** — the brand's voice, north star, persona, and facts come entirely from the per-brand padding files at the container root. Read in this order before drafting:
+
+1. **`/home/agent/project/brand-rules.md`** — REQUIRED. ICP, mission, doctrine, allowed/disallowed claims, newsletter CTA. The whole newsletter must serve the ICP and obey the claims policy. If missing → SKILL_RESULT: fail | brand-rules.md missing. Fire ❌ Telegram.
+2. **`/home/agent/project/brand-voice.md`** — REQUIRED. Tone, banned phrases, signature moves, surface rules (Oxford comma / em dashes / exclamations). Every sentence must pass these. If missing → fall back to CLAUDE.md voice section + fire ⚠️ Telegram warning.
+3. **`/home/agent/project/email-persona.md`** — REQUIRED. Sender persona (name, role, sign-off, signature voice). The newsletter is signed by this persona; opener and sign-off pull from here. If missing → SKILL_RESULT: fail | email-persona.md missing. Fire ❌ Telegram.
+4. **`/home/agent/project/knowledge-base.md`** OR **`/home/agent/project/knowledge_base/`** — OPTIONAL but strongly recommended. Any factual claim in the newsletter (product mechanism, ingredient, study citation, evidence) must be backed by the KB. If a needed fact is missing from KB, escalate ("KB gap: I need X to write claim Y") — do not fabricate.
+
+After reading the padding, proceed to the steps below.
+
 ## Process
 
 ### Step 1: Read Newsletter Queue
@@ -72,15 +83,20 @@ If the URL contains `tinify`, `api.tinify.com`, or `replicate.delivery` — STOP
 ### Step 5: Write full newsletter HTML
 Structure:
 ```html
-<!-- Header: brand logo + tagline -->
+<!-- Header: brand logo + tagline (tagline from brand-rules.md "Tagline energy") -->
 <!-- Hero image -->
-<!-- Opening paragraph: warm greeting, 40-60 words, brand voice -->
+<!-- Opening paragraph: 40-60 words, in brand-voice.md voice, addressed by email-persona.md sender -->
 <!-- Featured section: post title as H2, 100-word summary, "Read More" button -->
-<!-- 3 Quick Takeaways: bullet list, each 1-2 sentences -->
-<!-- Mid-section CTA: product or community mention -->
-<!-- Closing: warm sign-off per brand voice in CLAUDE.md -->
+<!-- 3 Quick Takeaways: bullet list, each 1-2 sentences, banned-phrase-free per brand-voice.md -->
+<!-- Mid-section CTA: pull from brand-rules.md § "CTAs by surface — Newsletter" -->
+<!-- Closing: sign-off per email-persona.md "Sign-Off" section -->
 <!-- Footer: unsubscribe link, social links, brand address -->
 ```
+
+**Voice/claims validation before render:**
+- Scan draft against `brand-voice.md` § "Banned phrases" — if any present, rewrite
+- Scan claims against `brand-rules.md` § "Allowed claims / disallowed claims" — if any disallowed claim present, rewrite or remove
+- Surface rules (Oxford comma, em dash, exclamation cap, English variant) per `brand-voice.md` § "Surface rules"
 
 ### Step 6: Send via Sendy
 **IMPORTANT:** `SENDY_URL` env var is just the domain (no protocol). Always prefix with `https://`.
@@ -129,4 +145,6 @@ SKILL_RESULT: success | Newsletter sent — "[subject line]" to [list_name]
 - Always read .claude/skills/email-verifier.md sub-skill before sending if list health is in question
 - Never send without a subject line
 - Always include unsubscribe link
-- Sign off per persona defined in CLAUDE.md
+- Sign off per `email-persona.md` § "Sign-Off"
+- **Never bake brand-specifics into this skill body.** If you find yourself wanting to add brand-specific tone rules — that belongs in `brand-voice.md`, not here.
+- **No backfill on miss.** If this skill is run for a slot it already completed, exit cleanly. Forward-only — see `feedback_backfill_default_off` policy.
