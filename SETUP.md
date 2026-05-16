@@ -322,7 +322,27 @@ If using Asana for task management:
 
 ---
 
-## Step 6: Build and Launch
+## Step 6: Fix Volume Permissions
+
+The container runs as UID 1001 (`agent`), but a virgin `git clone` produces files owned by your host user (typically UID 1000). Without this step, the container can't write to its own log directory and crash-loops with `PermissionError`.
+
+```bash
+sudo bash scripts/setup/fix-perms.sh
+```
+
+The script:
+- Creates the `jonops-shared` group (GID 1001) if missing
+- Adds your invoking host user to that group (so you can still edit files from the host)
+- chowns the project tree to `1001:jonops-shared`
+- Sets directory mode to `2775` (setgid bit, so new files inherit the shared group)
+- Sets file mode to `g+rwX` (group write, exec preserved on scripts)
+- Configures default ACLs so files created later by the container stay writable from the host
+
+If you added yourself to the group fresh, log out and back in for it to take effect. Idempotent — safe to re-run.
+
+---
+
+## Step 7: Build and Launch
 
 ```bash
 # Build the Docker image
@@ -337,7 +357,7 @@ docker compose logs -f
 
 ---
 
-## Step 7: Verify Everything Works
+## Step 8: Verify Everything Works
 
 ### Check Scheduler Status
 
