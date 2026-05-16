@@ -42,12 +42,14 @@ Each platform's caption, image prompt, and scheduling time are unique — delega
            │
            ├── Read social-facebook.md   → execute (static 16:9)
            ├── Read social-pinterest.md  → execute (static 2:3)
-           ├── Read social-tiktok.md     → execute in VIDEO mode
-           │     └── generate-tiktok-video.sh
-           │           ├── generate-image.sh × N  (slides)
-           │           ├── jamendo-download.sh    (BGM)
-           │           ├── elevenlabs-tts.sh      (voiceover)
-           │           └── remotion/render-ffmpeg.py
+           ├── Read social-tiktok.md     → execute in VIDEO mode (Almanac engine)
+           │     └── python3 almanac/almanac_pipeline.py --brand <slug>
+           │           ├── Claude (7-beat warm-hug script + verified_facts)
+           │           ├── Freepik / FLUX  (per-beat imagery)
+           │           ├── ElevenLabs      (voiceover)
+           │           ├── Replicate WhisperX (word-level karaoke timing)
+           │           ├── Replicate MusicGen (original AI BGM)
+           │           └── HyperFrames + GSAP composition → render → Cloudinary
            │
            └── Read social-instagram.md  → execute in REEL mode
                  └── reuses $VIDEO_URL from tiktok step (NO re-render)
@@ -120,20 +122,20 @@ Do these **first**, in parallel where possible, so they're done before the slow 
 2. Execute Step 1 (write a 200–250 char keyword-dense description from the Research Brief), Step 2 (2:3 image, `FILENAME_SLUG=sp2-pinterest-${TOMORROW}`), Step 3 (schedule at `${TOMORROW}T13:00:00` with `pinterestData.boardId`)
 3. Capture the result
 
-### Step 5: Delegate to TikTok (VIDEO mode) — the flagship render
+### Step 5: Delegate to TikTok (VIDEO mode) — the flagship Almanac render
 1. `Read` tool → `.claude/skills/social-tiktok.md`
-2. `MODE="video"`
+2. `MODE="video"`, `BRAND_SLUG="<your container's brand slug>"`
 3. Execute the subskill's video pipeline:
-   - **Write the narration text** (`NARRATION_TEXT`) — 2–4 short sentences, ~300 chars target, max 500. Natural spoken cadence. Pull the strongest hook + payoff from the Research Brief.
-   - **Write 3–4 slide prompts** (`SLIDE_PROMPTS`) — each describes a distinct vertical 9:16 scene matching brand image style from CLAUDE.md. Narrative arc: opening wide shot → subject close-up → payoff → optional CTA beat.
-   - **Pick the mood** (`MOOD`) based on the Topic's angle (see the mood table in social-tiktok.md)
-   - **Write a TikTok caption** (150–300 chars, 3–5 hashtags, no line breaks)
-   - **Invoke** `generate-tiktok-video.sh` with `FILENAME_SLUG=sp2-tiktok-${TOMORROW}` and all the above params
-   - **Extract** `VIDEO_URL` (permanent WP URL) AND `BGM_ATTRIBUTION` (Jamendo license credit — must append to caption)
+   - **Write a TikTok caption** (150–300 chars, 3–5 hashtags, no line breaks) — no music attribution needed; MusicGen is original-per-video
+   - **Invoke Almanac**: `python3 /home/agent/project/almanac/almanac_pipeline.py --brand $BRAND_SLUG --topic-override "$TITLE" --angle-override "$CONTENT_SOURCE" --skip-metricool --json-output /tmp/almanac-$FILENAME_SLUG.json`
+   - Almanac handles internally: 7-beat warm-hug script generation (with verified_facts injection), per-beat imagery (Freepik/FLUX), voiceover (ElevenLabs with brand voice_id), word-level karaoke timing (Replicate WhisperX), AI BGM (Replicate MusicGen from brand music_prompt), HyperFrames composition + render, Cloudinary upload
+   - **Extract** `VIDEO_URL` from the structured JSON output (`/tmp/almanac-$FILENAME_SLUG.json` → `.video_url`)
    - **Schedule** via Metricool at `${TOMORROW}T16:00:00`
 4. Capture the result including `VIDEO_URL` (critical — Instagram reuses it)
 
-**If video pipeline fails** (empty `VIDEO_URL`): the subskill falls back to a 9:16 static image. In that case `VIDEO_URL=""` and the Instagram step must also fall back to a 1:1 static image (see Step 6 fallback).
+**No slide prompts, narration text, or mood required from the orchestrator.** Almanac derives all of those from the brand.json + DESIGN.md + the Research Brief.
+
+**If Almanac fails** (non-zero exit or empty `video_url`): the subskill falls back to a 9:16 static image. In that case `VIDEO_URL=""` and the Instagram step must also fall back to a 1:1 static image (see Step 6 fallback).
 
 ### Step 6: Delegate to Instagram (REEL mode) — reuses the TikTok video
 1. `Read` → `.claude/skills/social-instagram.md`

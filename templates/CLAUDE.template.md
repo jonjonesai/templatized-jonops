@@ -232,41 +232,49 @@ Aspect ratios: Featured/Facebook: `16:9` | Instagram square: `1:1` | Pinterest: 
 
 ---
 
-## TikTok / Reels Video Pipeline
-Social Poster 2 (evening daily) renders short-form video for TikTok + Instagram Reels. One render, two platforms.
+## TikTok / Reels Video Pipeline — Almanac
+Social Poster 2 (evening daily) renders short-form vertical video for TikTok + Instagram Reels via the **Almanac** engine. One render, two platforms. ~$0.33 per 30-second 9:16 video.
 
-**Orchestrator:** `generate-tiktok-video.sh` — chains slide generation → BGM → voiceover → FFmpeg render → WP upload.
+**Engine:** `/home/agent/project/almanac/almanac_pipeline.py` — HyperFrames + GSAP composition with karaoke per-word captions. Built around the warm-hug doctrine (script tells the story, never sells the merch). Replaced the older Remotion + Jamendo slideshow path (deleted 2026-05-16).
 
 ```bash
-VIDEO_JSON=$(bash /home/agent/project/generate-tiktok-video.sh \
-  --title "Video Title" \
-  --subtitle "{{BRAND_URL}}" \
-  --slides "Scene 1 description|Scene 2 description|Scene 3 description" \
-  --narration-text "Your narration text here. Keep it under 300 chars." \
-  --mood "upbeat,pop" \
-  --filename "tiktok-2026-04-10")
+ALMANAC_RESULT="/tmp/almanac-${FILENAME_SLUG}.json"
+
+python3 /home/agent/project/almanac/almanac_pipeline.py \
+  --brand "{{BRAND_SLUG}}" \
+  --topic-override "${TITLE}" \
+  --angle-override "${CONTENT_SOURCE}" \
+  --skip-metricool \
+  --json-output "${ALMANAC_RESULT}"
+
+# Parse structured output
+VIDEO_URL=$(python3 -c "import json; print(json.load(open('${ALMANAC_RESULT}'))['video_url'])")
+TOPIC_TITLE=$(python3 -c "import json; print(json.load(open('${ALMANAC_RESULT}'))['topic_title'])")
+HERO_STILL_URL=$(python3 -c "import json; print(json.load(open('${ALMANAC_RESULT}'))['hero_still_url'])")
 ```
 
-**Component helpers:**
-- `jamendo-download.sh` — fetches royalty-free BGM from Jamendo API, filters out NC/ND licenses (commercial-safe CC-BY / CC-BY-SA only). Caches tracks in `remotion/public/jamendo-cache/`.
-- `elevenlabs-tts.sh` — generates voiceover MP3 via ElevenLabs. Voice: configurable via `ELEVENLABS_VOICE_ID` env var (default: George). Model: `eleven_multilingual_v2`. Hard cap: **500 chars** (cost control). Target: 2–4 sentences, ~300 chars.
-- `remotion/render-ffmpeg.py` — FFmpeg-based composition renderer with Ken Burns zoompan, subtitles, and title/outro cards.
+**What Almanac handles internally** (no orchestrator input required for these):
+- 7-beat script generation via Claude with the warm-hug + per-beat content contract + `verified_facts` injection
+- Per-beat imagery — Freepik 9:16 video clips OR FLUX illustrations (controlled by brand.json `prefer_video_clips`)
+- Voiceover via ElevenLabs (uses the brand's `voice_id`)
+- Word-level karaoke timing via Replicate WhisperX
+- Original AI background music via Replicate MusicGen (uses brand.json `music_prompt`)
+- HyperFrames composition + GSAP timeline + render
+- Cloudinary upload
 
-**Jamendo mood mapping:**
-| Content angle | Mood tag |
-|---------------|----------|
-| Cultural / heritage / educational | `chill,world` |
-| Food / energetic / fun | `upbeat,pop` |
-| Nature / travel / landscapes | `ambient,electronic` |
-| Product drop / hype | `energetic,hiphop` |
+**Per-brand config** lives at `/home/agent/project/almanac/{{BRAND_SLUG}}/`:
+- `brand.json` — voice ID, colors, fonts, Airtable IDs, anti-patterns, music prompt
+- `DESIGN.md` — visual identity manifesto
+- `scripts/build-karaoke-html.py` — per-brand HTML+GSAP composer
+- `hyperframes.json`, `meta.json`, `package.json` — HyperFrames scaffolding
 
 **Fallback chain:**
-1. ElevenLabs fails → render with BGM only (no voiceover)
-2. Jamendo fails → use cached fallback BGM
-3. `render-ffmpeg.py` fails → subskill falls back to 9:16 static image and sets `VIDEO_URL=""`
-4. Empty `VIDEO_URL` → Instagram Reel step falls back to 1:1 static image
+1. Almanac exits non-zero → subskill falls back to 9:16 static image and sets `VIDEO_URL=""`
+2. Empty `VIDEO_URL` → Instagram Reel step falls back to 1:1 static image
 
-**License attribution:** Always append the Jamendo `bgm.attribution` string to TikTok and Instagram Reel captions. This is a CC-BY-SA license requirement.
+**No license attribution required.** MusicGen is original-per-video AI BGM. Unlike the old Jamendo path, no caption credit is needed.
+
+**Standalone Almanac repo + docs:** https://github.com/jonjonesai/almanac · see `almanac/docs/DOCTRINE.md` for the warm-hug doctrine, `almanac/docs/VERIFIED_FACTS.md` for the fact-grounding pattern, `almanac/docs/BRAND_ONBOARDING.md` for adding a new brand.
 
 ---
 
@@ -402,10 +410,8 @@ bash /home/agent/project/telegram-alert.sh "✅ [{{PROJECT_SLUG}}] skill-name �
 - **Instantly** — REST API v2 via curl for email outreach campaigns
 - **Cloudinary** — Image CDN for social media posts. `generate-image.sh` uploads to Cloudinary automatically and returns `cdn_url` (permanent JPEG). Use `cdn_url` for Metricool scheduling — never `wp_media_url` (WordPress may auto-convert to WebP, which Meta APIs reject)
 - **generate-image.sh** — Local script: Replicate (JPEG) → Tinify → Cloudinary CDN → WordPress. Supports `--model flux-pro` (default) and `--model flux-2-pro` (premium). Returns both `cdn_url` (social media) and `wp_media_url` (blog featured images)
-- **generate-tiktok-video.sh** — Local script: full TikTok/Reels video pipeline (slides + BGM + voiceover + render + WP upload)
-- **jamendo-download.sh** — Local helper: royalty-free BGM from Jamendo (CC-BY / CC-BY-SA only)
-- **elevenlabs-tts.sh** — Local helper: text-to-speech via ElevenLabs (configurable voice, 500-char cap)
-- **remotion/render-ffmpeg.py** — FFmpeg-based composition renderer used by the video pipeline
+- **almanac/almanac_pipeline.py** — Production video engine: warm-hug 7-beat script → Freepik/FLUX imagery → ElevenLabs voice → WhisperX karaoke timing → MusicGen BGM → HyperFrames+GSAP render → Cloudinary upload. Brand config at `almanac/<brand-slug>/`. ~$0.33/video.
+- **elevenlabs-tts.sh** — Local helper: text-to-speech via ElevenLabs (configurable voice, 500-char cap). Still used by static-image flows that need voice; Almanac calls ElevenLabs directly via its Python pipeline.
 - **Bash, Python3** — Full shell and scripting access inside the container
 
 ## Memory Notes
