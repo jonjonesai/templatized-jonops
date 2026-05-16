@@ -1,6 +1,6 @@
 ---
 skill: daily-watchdog
-version: 1.1.0
+version: 1.1.1
 cadence: daily (23:30)
 trigger: cron
 airtable_reads: []
@@ -83,7 +83,7 @@ After retry, check the new log file for success or failure.
 
 ### Step 4b: Sweep Metricool for failed scheduled posts
 
-Facebook and Pinterest intermittently return generic 500s ("Please reduce the amount of data…" or "Something went wrong on our end") on otherwise valid posts. These are provider-side flakes, not stack bugs. Reclone the failed post into a +10-minute slot so it gets a second shot, capped at 2 retries per original post.
+Facebook and Pinterest intermittently return generic 500s ("Please reduce the amount of data…" or "Something went wrong on our end") on otherwise valid posts. Pinterest separately flakes with `Code: 404 - Pin not found.` — Metricool's create-pin call succeeds but its immediate confirm-fetch hits a Pinterest read-consistency window before the new pin id has propagated. These are all provider-side flakes, not stack bugs. Reclone the failed post into a +10-minute slot so it gets a second shot, capped at 2 retries per original post.
 
 **Step 4b.1 — Resolve env (handles both naming conventions across brands):**
 ```bash
@@ -114,7 +114,8 @@ Parse `/tmp/metricool-today.json`. For each post where any `providers[].status =
 - Retry ONLY if `detailedStatus` matches a known transient pattern:
   - Contains `"Code: 500"` AND (`"reduce the amount of data"` OR `"Something went wrong on our end"` OR `"Internal Server Error"`)
   - OR contains `"timeout"` / `"timed out"` / `"503"` / `"502"`
-- Do NOT retry if `detailedStatus` indicates auth/format/policy issues (`"invalid_token"`, `"expired"`, `"unsupported"`, `"policy"`, `"permission"`, `"Code: 4"` series, `"Code: 1"` with no transient phrase). Note these in the daily report as "NEEDS OPERATOR" — do not silently skip.
+  - OR `network == "pinterest"` AND `detailedStatus` contains `"Code: 404"` AND `"Pin not found"` (Pinterest read-consistency flake — narrow allow-list, only this exact wording on the pinterest network)
+- Do NOT retry if `detailedStatus` indicates auth/format/policy issues (`"invalid_token"`, `"expired"`, `"unsupported"`, `"policy"`, `"permission"`, `"Code: 4"` series, `"Code: 1"` with no transient phrase). Note these in the daily report as "NEEDS OPERATOR" — do not silently skip. The single carve-out is the pinterest `"Pin not found"` 404 above; all other 4xx still hard-fail to NEEDS OPERATOR.
 
 **Step 4b.4 — Check retry counter:**
 
@@ -159,6 +160,7 @@ Add a section to the report:
 🔁 METRICOOL RETRIES:
   - 09:00 facebook (post 325817152) — transient 500, re-cloned to 23:42 [retry 1/2]
   - 09:00 pinterest (post 325673415) — transient 500, re-cloned to 23:42 [retry 1/2]
+  - 15:00 pinterest (post 326078770) — Pin-not-found 404, re-cloned to 23:42 [retry 1/2]
 
 ⚠️ METRICOOL — NEEDS OPERATOR:
   - 11:00 instagram (post 325XXXXXX) — invalid_token, requires re-auth
@@ -212,7 +214,8 @@ SKILL_RESULT: success | [N] passed, [N] failed, [N] retried ([N] retry success) 
 | Prompt file not found | ❌ No | Escalate to Asana |
 | Timed out (task took too long) | ✅ Yes | Retry once with same timeout |
 | Metricool post — transient 500 (FB "reduce data" / Pinterest "something went wrong" / 502/503/timeout) | ✅ Yes | Reclone to +10 min, capped at 2 retries / uuid / 3 days |
-| Metricool post — auth/format/policy (invalid_token, expired, unsupported, policy, permission, Code 4xx) | ❌ No | Report under "NEEDS OPERATOR" |
+| Metricool post — Pinterest `Code: 404 - Pin not found.` (read-consistency flake on confirm-fetch after create) | ✅ Yes | Reclone to +10 min, capped at 2 retries / uuid / 3 days |
+| Metricool post — auth/format/policy (invalid_token, expired, unsupported, policy, permission, other Code 4xx) | ❌ No | Report under "NEEDS OPERATOR" |
 
 ## Rules
 - Never retry blog-writer or daily-contribution if WordPress already has today's post
