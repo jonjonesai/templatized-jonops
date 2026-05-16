@@ -893,6 +893,8 @@ def main() -> None:
     ap.add_argument("--topic-override", help="Skip Airtable queue read; use this topic literally")
     ap.add_argument("--angle-override", default="")
     ap.add_argument("--notes-override", default="")
+    ap.add_argument("--skip-metricool", action="store_true", help="Skip step 10 metricool scheduling; caller schedules separately. Used when Almanac is invoked from a parent orchestrator (templatize-jonops social-tiktok.md) that handles distribution itself.")
+    ap.add_argument("--json-output", help="Write a structured result JSON (video_url, topic_title, mp4_path, duration, plan_path, hero_still_url) to this path after pipeline completes. Used for parent-orchestrator integration.")
     args = ap.parse_args()
 
     if DRYRUN_SENTINEL.exists():
@@ -1114,33 +1116,38 @@ def main() -> None:
         video_url = cloudinary_upload(final_mp4, brand_cfg["cloudinary_folder"], env)
         print(f"  {video_url}")
 
-        print(f"[10/10] metricool schedule (dryrun={args.dryrun})")
         # Hero still: use beat-1's actual bg filename (works for both photo and illustration modes).
         # Skip the upload entirely if the brand only fires video lane (no still-lane networks).
         networks = brand_cfg.get("metricool_networks") or ["tiktok", "instagram_reel"]
         still_lane_networks = {"facebook", "pinterest", "bluesky", "threads", "twitter", "gbp"}
         needs_hero_still = bool(still_lane_networks.intersection(networks))
         hero_still_name = plan["beats"][0].get("bg") if plan.get("beats") else None
-        if not args.dryrun and needs_hero_still and hero_still_name:
+        if not args.dryrun and needs_hero_still and hero_still_name and not args.skip_metricool:
             hero_still = assets / hero_still_name
             hero_still_url = cloudinary_upload_image(hero_still, brand_cfg["cloudinary_folder"], env)
         else:
-            hero_still_url = "(skipped — video-only brand or dryrun)"
-        # Schedule for next 09:00 Asia/Makassar (morning prime). When run on Mon/Wed/Fri 15:00 WITA cron,
-        # this puts the post out next morning 09:00 WITA — ~18 hours of Metricool buffer.
-        now_wita = datetime.now(ZoneInfo("Asia/Makassar"))
-        if now_wita.hour >= 8:
-            target = (now_wita + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
+            hero_still_url = "(skipped — video-only brand, dryrun, or --skip-metricool)"
+
+        if args.skip_metricool:
+            print(f"[10/10] metricool schedule SKIPPED (--skip-metricool — parent orchestrator handles distribution)")
+            result = {"skipped": True, "reason": "skip-metricool flag set"}
         else:
-            target = now_wita.replace(hour=9, minute=0, second=0, microsecond=0)
-        when_iso = target.strftime("%Y-%m-%dT%H:%M:%S")
-        handle = brand_cfg.get("social_handle") or f"@{brand_cfg['brand']}"
-        caption_video = f"{plan['topic_title']}\n\nFollow {handle} for more."
-        caption_still = caption_video
-        result = metricool_schedule(
-            brand_cfg, env, video_url, caption_video, caption_still, hero_still_url, when_iso, args.dryrun
-        )
-        (run_dir / "metricool_result.json").write_text(json.dumps(result, indent=2))
+            print(f"[10/10] metricool schedule (dryrun={args.dryrun})")
+            # Schedule for next 09:00 Asia/Makassar (morning prime). When run on Mon/Wed/Fri 15:00 WITA cron,
+            # this puts the post out next morning 09:00 WITA — ~18 hours of Metricool buffer.
+            now_wita = datetime.now(ZoneInfo("Asia/Makassar"))
+            if now_wita.hour >= 8:
+                target = (now_wita + timedelta(days=1)).replace(hour=9, minute=0, second=0, microsecond=0)
+            else:
+                target = now_wita.replace(hour=9, minute=0, second=0, microsecond=0)
+            when_iso = target.strftime("%Y-%m-%dT%H:%M:%S")
+            handle = brand_cfg.get("social_handle") or f"@{brand_cfg['brand']}"
+            caption_video = f"{plan['topic_title']}\n\nFollow {handle} for more."
+            caption_still = caption_video
+            result = metricool_schedule(
+                brand_cfg, env, video_url, caption_video, caption_still, hero_still_url, when_iso, args.dryrun
+            )
+            (run_dir / "metricool_result.json").write_text(json.dumps(result, indent=2))
 
         ledger_line = (
             f"- {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')} sp2_pipeline "
@@ -1151,6 +1158,27 @@ def main() -> None:
 
         if is_real_consume:
             mark_topic_used(brand_cfg, env, topic["id"])
+
+        # Optional structured-output for parent orchestrator integration.
+        # Used by templatize-jonops social-tiktok.md (and any other external
+        # caller) to grab the cloudinary URL + plan metadata without scraping stdout.
+        if args.json_output:
+            json_result = {
+                "video_url": video_url,
+                "mp4_path": str(final_mp4),
+                "topic_title": plan.get("topic_title", ""),
+                "topic_id": topic["id"],
+                "brand": args.brand,
+                "hero_still_url": hero_still_url,
+                "plan_path": str(plan_path),
+                "run_dir": str(run_dir),
+                "metricool_result": result if not args.skip_metricool else None,
+                "dryrun": args.dryrun,
+                "skip_metricool": args.skip_metricool,
+            }
+            Path(args.json_output).write_text(json.dumps(json_result, indent=2))
+            print(f"  wrote structured result to {args.json_output}")
+
         print(f"DONE → {run_dir}")
     except BaseException:
         if is_real_consume:
